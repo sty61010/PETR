@@ -23,12 +23,13 @@ from mmdet.models.utils.builder import TRANSFORMER
 from mmcv.cnn import (build_activation_layer, build_conv_layer,
                       build_norm_layer, xavier_init)
 from mmcv.runner.base_module import BaseModule
-from mmcv.cnn.bricks.registry import (ATTENTION,TRANSFORMER_LAYER,
+from mmcv.cnn.bricks.registry import (ATTENTION, TRANSFORMER_LAYER,
                                       TRANSFORMER_LAYER_SEQUENCE)
 from mmcv.utils import (ConfigDict, build_from_cfg, deprecated_api_warning,
                         to_2tuple)
 import copy
 import torch.utils.checkpoint as cp
+
 
 @TRANSFORMER.register_module()
 class PETRTransformer(BaseModule):
@@ -66,7 +67,6 @@ class PETRTransformer(BaseModule):
                 xavier_init(m, distribution='uniform')
         self._is_init = True
 
-
     def forward(self, x, mask, query_embed, pos_embed, reg_branch=None):
         """Forward function for `Transformer`.
         Args:
@@ -88,8 +88,8 @@ class PETRTransformer(BaseModule):
                       [bs, embed_dims, h, w].
         """
         bs, n, c, h, w = x.shape
-        memory = x.permute(1, 3, 4, 0, 2).reshape(-1, bs, c) # [bs, n, c, h, w] -> [n*h*w, bs, c]
-        pos_embed = pos_embed.permute(1, 3, 4, 0, 2).reshape(-1, bs, c) # [bs, n, c, h, w] -> [n*h*w, bs, c]
+        memory = x.permute(1, 3, 4, 0, 2).reshape(-1, bs, c)  # [bs, n, c, h, w] -> [n*h*w, bs, c]
+        pos_embed = pos_embed.permute(1, 3, 4, 0, 2).reshape(-1, bs, c)  # [bs, n, c, h, w] -> [n*h*w, bs, c]
         query_embed = query_embed.unsqueeze(1).repeat(
             1, bs, 1)  # [num_query, dim] -> [num_query, bs, dim]
         mask = mask.view(bs, -1)  # [bs, n, h, w] -> [bs, n*h*w]
@@ -104,13 +104,13 @@ class PETRTransformer(BaseModule):
             query_pos=query_embed,
             key_padding_mask=mask,
             reg_branch=reg_branch,
-            )
+        )
         out_dec = out_dec.transpose(1, 2)
         memory = memory.reshape(n, h, w, bs, c).permute(3, 0, 4, 1, 2)
-        return  out_dec, memory
+        return out_dec, memory
 
 
-@TRANSFORMER_LAYER.register_module()
+@   .register_module()
 class PETRTransformerDecoderLayer(BaseTransformerLayer):
     """Implements decoder layer in DETR transformer.
     Args:
@@ -155,35 +155,35 @@ class PETRTransformerDecoderLayer(BaseTransformerLayer):
         assert set(operation_order) == set(
             ['self_attn', 'norm', 'cross_attn', 'ffn'])
         self.use_checkpoint = with_cp
-    
-    def _forward(self, 
-                query,
-                key=None,
-                value=None,
-                query_pos=None,
-                key_pos=None,
-                attn_masks=None,
-                query_key_padding_mask=None,
-                key_padding_mask=None,
-                ):
+
+    def _forward(self,
+                 query,
+                 key=None,
+                 value=None,
+                 query_pos=None,
+                 key_pos=None,
+                 attn_masks=None,
+                 query_key_padding_mask=None,
+                 key_padding_mask=None,
+                 ):
         """Forward function for `TransformerCoder`.
         Returns:
             Tensor: forwarded results with shape [num_query, bs, embed_dims].
         """
         x = super(PETRTransformerDecoderLayer, self).forward(
-                query,
-                key=key,
-                value=value,
-                query_pos=query_pos,
-                key_pos=key_pos,
-                attn_masks=attn_masks,
-                query_key_padding_mask=query_key_padding_mask,
-                key_padding_mask=key_padding_mask,
-                )
+            query,
+            key=key,
+            value=value,
+            query_pos=query_pos,
+            key_pos=key_pos,
+            attn_masks=attn_masks,
+            query_key_padding_mask=query_key_padding_mask,
+            key_padding_mask=key_padding_mask,
+        )
 
         return x
 
-    def forward(self, 
+    def forward(self,
                 query,
                 key=None,
                 value=None,
@@ -201,7 +201,7 @@ class PETRTransformerDecoderLayer(BaseTransformerLayer):
 
         if self.use_checkpoint and self.training:
             x = cp.checkpoint(
-                self._forward, 
+                self._forward,
                 query,
                 key,
                 value,
@@ -210,19 +210,20 @@ class PETRTransformerDecoderLayer(BaseTransformerLayer):
                 attn_masks,
                 query_key_padding_mask,
                 key_padding_mask,
-                )
+            )
         else:
             x = self._forward(
-            query,
-            key=key,
-            value=value,
-            query_pos=query_pos,
-            key_pos=key_pos,
-            attn_masks=attn_masks,
-            query_key_padding_mask=query_key_padding_mask,
-            key_padding_mask=key_padding_mask
+                query,
+                key=key,
+                value=value,
+                query_pos=query_pos,
+                key_pos=key_pos,
+                attn_masks=attn_masks,
+                query_key_padding_mask=query_key_padding_mask,
+                key_padding_mask=key_padding_mask
             )
         return x
+
 
 @ATTENTION.register_module()
 class PETRMultiheadAttention(BaseModule):
@@ -367,7 +368,6 @@ class PETRMultiheadAttention(BaseModule):
         return identity + self.dropout_layer(self.proj_drop(out))
 
 
-
 @TRANSFORMER_LAYER_SEQUENCE.register_module()
 class PETRTransformerEncoder(TransformerLayerSequence):
     """TransformerEncoder of DETR.
@@ -446,4 +446,3 @@ class PETRTransformerDecoder(TransformerLayerSequence):
                 else:
                     intermediate.append(query)
         return torch.stack(intermediate)
-
