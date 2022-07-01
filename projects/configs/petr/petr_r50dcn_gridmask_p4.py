@@ -78,8 +78,12 @@ model = dict(
                     feedforward_channels=2048,
                     ffn_dropout=0.1,
                     with_cp=True,
-                    operation_order=('self_attn', 'norm', 'cross_attn', 'norm',
-                                     'ffn', 'norm')),
+                    operation_order=(
+                        'self_attn', 'norm',
+                        'cross_attn', 'norm',
+                        'ffn', 'norm'
+                    )
+                ),
             )),
         bbox_coder=dict(
             type='NMSFreeCoder',
@@ -110,7 +114,8 @@ model = dict(
             cls_cost=dict(type='FocalLossCost', weight=2.0),
             reg_cost=dict(type='BBox3DL1Cost', weight=0.25),
             iou_cost=dict(type='IoUCost', weight=0.0),  # Fake cost. This is just to make it compatible with DETR head.
-            pc_range=point_cloud_range))))
+            pc_range=point_cloud_range
+        ))))
 
 dataset_type = 'CustomNuScenesDataset'
 data_root = 'data/nuscenes/'
