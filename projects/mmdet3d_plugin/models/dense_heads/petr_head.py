@@ -423,10 +423,20 @@ class PETRHead(AnchorFreeHead):
         query_embeds = self.query_embedding(pos2posemb3d(reference_points))
         reference_points = reference_points.unsqueeze(0).repeat(batch_size, 1, 1)  # .sigmoid()
 
-        outs_dec, _ = self.transformer(x, masks, query_embeds, pos_embed, self.reg_branches)
+        # out_dec: [num_layers, num_query, bs, dim]
+        outs_dec, _ = self.transformer(
+            x,
+            masks,
+            query_embeds,
+            pos_embed,
+            self.reg_branches,
+        )
+
         outs_dec = torch.nan_to_num(outs_dec)
+
         outputs_classes = []
         outputs_coords = []
+        
         for lvl in range(outs_dec.shape[0]):
             reference = inverse_sigmoid(reference_points.clone())
             assert reference.shape[-1] == 3

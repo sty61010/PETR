@@ -157,6 +157,7 @@ db_sampler = dict(
         load_dim=5,
         use_dim=[0, 1, 2, 3, 4],
         file_client_args=file_client_args))
+
 ida_aug_conf = {
     "resize_lim": (0.8, 1.0),
     "final_dim": (512, 1408),
@@ -166,6 +167,7 @@ ida_aug_conf = {
     "W": 1600,
     "rand_flip": True,
 }
+
 train_pipeline = [
     dict(type='LoadMultiViewImageFromFiles', to_float32=True),
     dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True, with_attr_label=False),
@@ -218,8 +220,19 @@ data = dict(
         # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
         # and box_type_3d='Depth' in sunrgbd and scannet dataset.
         box_type_3d='LiDAR'),
-    val=dict(type=dataset_type, pipeline=test_pipeline, classes=class_names, modality=input_modality),
-    test=dict(type=dataset_type, pipeline=test_pipeline, classes=class_names, modality=input_modality))
+    val=dict(
+        type=dataset_type,
+        pipeline=test_pipeline,
+        classes=class_names,
+        modality=input_modality,
+    ),
+    test=dict(
+        type=dataset_type,
+        pipeline=test_pipeline,
+        classes=class_names,
+        modality=input_modality
+    )
+)
 
 optimizer = dict(
     type='AdamW',
