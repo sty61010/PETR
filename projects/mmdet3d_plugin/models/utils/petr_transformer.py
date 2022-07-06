@@ -110,7 +110,7 @@ class PETRTransformer(BaseModule):
         return out_dec, memory
 
 
-@   .register_module()
+@TRANSFORMER_LAYER.register_module()
 class PETRTransformerDecoderLayer(BaseTransformerLayer):
     """Implements decoder layer in DETR transformer.
     Args:
