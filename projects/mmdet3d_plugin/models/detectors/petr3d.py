@@ -16,8 +16,12 @@ from os import path as osp
 from mmcv.runner import force_fp32, auto_fp16
 from mmdet.models import DETECTORS
 from mmdet3d.core import bbox3d2result
-from mmdet3d.core import (CameraInstance3DBoxes,LiDARInstance3DBoxes, bbox3d2result,
-                          show_multi_modality_result)
+from mmdet3d.core import (
+    CameraInstance3DBoxes,
+    LiDARInstance3DBoxes,
+    bbox3d2result,
+    show_multi_modality_result,
+)
 from mmdet3d.models.detectors.mvx_two_stage import MVXTwoStageDetector
 from projects.mmdet3d_plugin.models.utils.grid_mask import GridMask
 
@@ -42,11 +46,22 @@ class Petr3D(MVXTwoStageDetector):
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None):
-        super(Petr3D, self).__init__(pts_voxel_layer, pts_voxel_encoder,
-                             pts_middle_encoder, pts_fusion_layer,
-                             img_backbone, pts_backbone, img_neck, pts_neck,
-                             pts_bbox_head, img_roi_head, img_rpn_head,
-                             train_cfg, test_cfg, pretrained)
+        super(Petr3D, self).__init__(
+            pts_voxel_layer, 
+            pts_voxel_encoder,
+            pts_middle_encoder, 
+            pts_fusion_layer,
+            img_backbone, 
+            pts_backbone, 
+            img_neck, 
+            pts_neck,
+            pts_bbox_head, 
+            img_roi_head, 
+            img_rpn_head,
+            train_cfg, 
+            test_cfg, 
+            pretrained, 
+            )
         self.grid_mask = GridMask(True, True, rotate=1, offset=False, ratio=0.5, mode=1, prob=0.7)
         self.use_grid_mask = use_grid_mask
 

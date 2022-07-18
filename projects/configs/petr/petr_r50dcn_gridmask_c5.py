@@ -22,7 +22,9 @@ input_modality = dict(
     use_camera=True,
     use_radar=False,
     use_map=False,
-    use_external=False)
+    use_external=False
+)
+
 model = dict(
     type='Petr3D',
     use_grid_mask=True,
@@ -243,7 +245,7 @@ lr_config = dict(
     # by_epoch=False
 )
 total_epochs = 24
-evaluation = dict(interval=24, pipeline=test_pipeline)
+evaluation = dict(interval=1, pipeline=test_pipeline)
 find_unused_parameters = False
 
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)

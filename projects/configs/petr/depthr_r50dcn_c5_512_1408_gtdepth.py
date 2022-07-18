@@ -32,7 +32,7 @@ model = dict(
         type='ResNet',
         depth=50,
         num_stages=4,
-        out_indices=(2, 3,),
+        out_indices=(3,),
         frozen_stages=-1,
         norm_cfg=dict(type='BN2d', requires_grad=False),
         norm_eval=True,
@@ -42,15 +42,10 @@ model = dict(
         stage_with_dcn=(False, False, True, True),
         pretrained='ckpts/resnet50_msra-5891d200.pth',
     ),
-    img_neck=dict(
-        type='CPFPN',
-        in_channels=[1024, 2048],
-        out_channels=256,
-        num_outs=2),
     pts_bbox_head=dict(
         type='PETRHead',
         num_classes=10,
-        in_channels=256,
+        in_channels=2048,
         num_query=900,
         LID=True,
         with_position=True,
@@ -80,12 +75,8 @@ model = dict(
                     feedforward_channels=2048,
                     ffn_dropout=0.1,
                     with_cp=True,
-                    operation_order=(
-                        'self_attn', 'norm',
-                        'cross_attn', 'norm',
-                        'ffn', 'norm'
-                    )
-                ),
+                    operation_order=('self_attn', 'norm', 'cross_attn', 'norm',
+                                     'ffn', 'norm')),
             )),
         bbox_coder=dict(
             type='NMSFreeCoder',
@@ -116,8 +107,7 @@ model = dict(
             cls_cost=dict(type='FocalLossCost', weight=2.0),
             reg_cost=dict(type='BBox3DL1Cost', weight=0.25),
             iou_cost=dict(type='IoUCost', weight=0.0),  # Fake cost. This is just to make it compatible with DETR head.
-            pc_range=point_cloud_range
-        ))))
+            pc_range=point_cloud_range))))
 
 dataset_type = 'CustomNuScenesDataset'
 data_root = 'data/nuscenes/'
@@ -159,7 +149,6 @@ db_sampler = dict(
         load_dim=5,
         use_dim=[0, 1, 2, 3, 4],
         file_client_args=file_client_args))
-
 ida_aug_conf = {
     "resize_lim": (0.8, 1.0),
     "final_dim": (512, 1408),
@@ -169,13 +158,11 @@ ida_aug_conf = {
     "W": 1600,
     "rand_flip": True,
 }
-
 train_pipeline = [
     dict(type='LoadMultiViewImageFromFiles', to_float32=True),
     dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True, with_attr_label=False),
     dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
     dict(type='ObjectNameFilter', classes=class_names),
-
     dict(type='ResizeCropFlipImage', data_aug_conf=ida_aug_conf, training=True),
     dict(type='GlobalRotScaleTransImage',
          rot_range=[-0.3925, 0.3925],
@@ -184,7 +171,6 @@ train_pipeline = [
          reverse_angle=True,
          training=True
          ),
-
     dict(type='NormalizeMultiviewImage', **img_norm_cfg),
     dict(type='PadMultiViewImage', size_divisor=32),
     dict(type='DefaultFormatBundle3D', class_names=class_names),
@@ -228,7 +214,7 @@ data = dict(
         type=dataset_type,
         pipeline=test_pipeline,
         classes=class_names,
-        modality=input_modality,
+        modality=input_modality
     ),
     test=dict(
         type=dataset_type,
@@ -266,24 +252,24 @@ runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 load_from = None
 resume_from = None
 
-# mAP: 0.3174
-# mATE: 0.8397
-# mASE: 0.2796
-# mAOE: 0.6158
-# mAVE: 0.9543
-# mAAE: 0.2326
-# NDS: 0.3665
-# Eval time: 199.1s
+# mAP: 0.3050
+# mATE: 0.8504
+# mASE: 0.2813
+# mAOE: 0.6539
+# mAVE: 1.0381
+# mAAE: 0.2438
+# NDS: 0.3496
+# Eval time: 313.1s
 
 # Per-class results:
 # Object Class    AP      ATE     ASE     AOE     AVE     AAE
-# car     0.503   0.607   0.155   0.120   1.107   0.241
-# truck   0.259   0.874   0.232   0.217   0.968   0.261
-# bus     0.329   0.864   0.219   0.188   2.289   0.411
-# trailer 0.105   1.143   0.253   0.548   0.400   0.104
-# construction_vehicle    0.071   1.233   0.503   1.216   0.122   0.349
-# pedestrian      0.407   0.735   0.294   1.016   0.770   0.313
-# motorcycle      0.294   0.810   0.277   0.901   1.471   0.146
-# bicycle 0.290   0.698   0.260   1.176   0.509   0.036
-# traffic_cone    0.497   0.608   0.322   nan     nan     nan
-# barrier 0.419   0.824   0.281   0.160   nan     nan
+# car     0.500   0.608   0.156   0.122   1.091   0.243
+# truck   0.259   0.876   0.239   0.203   0.975   0.264
+# bus     0.300   0.912   0.222   0.197   2.383   0.446
+# trailer 0.104   1.169   0.253   0.630   0.480   0.070
+# construction_vehicle    0.051   1.161   0.495   1.266   0.126   0.399
+# pedestrian      0.395   0.755   0.298   1.132   0.854   0.340
+# motorcycle      0.293   0.749   0.269   0.983   1.929   0.157
+# bicycle 0.274   0.777   0.271   1.191   0.467   0.031
+# traffic_cone    0.482   0.649   0.331   nan     nan     nan
+# barrier 0.392   0.847   0.280   0.162   nan     nan
