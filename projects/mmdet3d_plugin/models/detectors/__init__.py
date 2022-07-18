@@ -10,4 +10,10 @@
 from .obj_dgcnn import ObjDGCNN
 from .detr3d import Detr3D
 from .petr3d import Petr3D
-__all__ = ['ObjDGCNN', 'Detr3D', 'Petr3D']
+from .depthr3d import Depthr3D
+__all__ = [
+    'ObjDGCNN',
+    'Detr3D',
+    'Petr3D',
+    'Depthr3D',
+]

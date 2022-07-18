@@ -5,4 +5,8 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 # ------------------------------------------------------------------------
 from .cp_fpn import CPFPN
-__all__ = ['CPFPN']
+from .depth_gt_encoder import DepthGTEncoder
+__all__ = [
+    'CPFPN',
+    'DepthGTEncoder',
+]
