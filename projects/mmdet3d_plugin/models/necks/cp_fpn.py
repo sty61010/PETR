@@ -11,7 +11,9 @@ from mmcv.runner import BaseModule, auto_fp16
 
 from mmdet.models import NECKS
 
-####This FPN remove the unused parameters which can used with checkpoint (with_cp = True in Backbone)
+# This FPN remove the unused parameters which can used with checkpoint (with_cp = True in Backbone)
+
+
 @NECKS.register_module()
 class CPFPN(BaseModule):
     r"""Feature Pyramid Network.
@@ -121,7 +123,7 @@ class CPFPN(BaseModule):
                 act_cfg=act_cfg,
                 inplace=False)
             self.lateral_convs.append(l_conv)
-            if i == 0 :
+            if i == 0:
                 fpn_conv = ConvModule(
                     out_channels,
                     out_channels,
@@ -180,7 +182,7 @@ class CPFPN(BaseModule):
         # build outputs
         # part 1: from original levels
         outs = [
-            self.fpn_convs[i](laterals[i]) if i==0 else laterals[i] for i in range(used_backbone_levels)
+            self.fpn_convs[i](laterals[i]) if i == 0 else laterals[i] for i in range(used_backbone_levels)
         ]
         # part 2: add extra levels
         if self.num_outs > len(outs):

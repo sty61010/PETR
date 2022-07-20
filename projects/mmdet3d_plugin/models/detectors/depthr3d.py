@@ -9,6 +9,7 @@
 # ------------------------------------------------------------------------
 
 import torch
+
 from mmcv.runner import force_fp32, auto_fp16
 from mmdet.models import DETECTORS
 from mmdet3d.core import bbox3d2result
@@ -59,8 +60,8 @@ class Depthr3D(MVXTwoStageDetector):
 
     @auto_fp16(apply_to=('img'), out_fp32=True)
     def extract_feat(
-        self, 
-        img, 
+        self,
+        img,
         img_metas,
     ):
         """Extract features from images and points."""
@@ -68,8 +69,8 @@ class Depthr3D(MVXTwoStageDetector):
         return img_feats
 
     def extract_img_feat(
-        self, 
-        img, 
+        self,
+        img,
         img_metas,
     ):
         """Extract features of images."""
@@ -89,6 +90,7 @@ class Depthr3D(MVXTwoStageDetector):
                 else:
                     B, N, C, H, W = img.size()
                     img = img.view(B * N, C, H, W)
+
             if self.use_grid_mask:
                 img = self.grid_mask(img)
             img_feats = self.img_backbone(img)
@@ -106,8 +108,8 @@ class Depthr3D(MVXTwoStageDetector):
 
     @force_fp32(apply_to=('img', 'points'))
     def forward(
-        self, 
-        return_loss=True, 
+        self,
+        return_loss=True,
         **kwargs,
     ):
         """Calls either forward_train or forward_test depending on whether
@@ -166,9 +168,9 @@ class Depthr3D(MVXTwoStageDetector):
 
         losses = dict()
         losses_pts = self.forward_pts_train(
-            img_feats, 
+            img_feats,
             gt_bboxes_3d,
-            gt_labels_3d, 
+            gt_labels_3d,
             img_metas,
             gt_bboxes_ignore,
         )
@@ -206,7 +208,7 @@ class Depthr3D(MVXTwoStageDetector):
         losses = self.pts_bbox_head.loss(*loss_inputs)
 
         return losses
-  
+
     def forward_test(
         self,
         img_metas,
@@ -225,8 +227,8 @@ class Depthr3D(MVXTwoStageDetector):
         gt_labels_3d = [gt_labels_3d] if gt_labels_3d is None else gt_labels_3d
 
         return self.simple_test(
-            img_metas[0],
-            img[0],
+            img_metas=img_metas[0],
+            img=img[0],
             gt_bboxes_3d=gt_bboxes_3d[0],
             gt_labels_3d=gt_labels_3d[0],
             **kwargs,
@@ -245,8 +247,8 @@ class Depthr3D(MVXTwoStageDetector):
 
         bbox_list = [dict() for i in range(len(img_metas))]
         bbox_pts = self.simple_test_pts(
-            img_feats, 
-            img_metas, 
+            x=img_feats,
+            img_metas=img_metas,
             rescale=rescale,
             gt_bboxes_3d=gt_bboxes_3d,
             gt_labels_3d=gt_labels_3d,
@@ -256,9 +258,9 @@ class Depthr3D(MVXTwoStageDetector):
         return bbox_list
 
     def simple_test_pts(
-        self, 
-        x, 
-        img_metas, 
+        self,
+        x,
+        img_metas,
         rescale=False,
         gt_bboxes_3d=None,
         gt_labels_3d=None,

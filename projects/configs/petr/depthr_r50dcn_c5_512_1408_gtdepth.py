@@ -62,7 +62,7 @@ model = dict(
             depth_max=60.0,
             embed_dims=embed_dims,
             num_levels=num_levels,
-            with_gt_depth_maps=True,
+            depth_gt_encoder_down_scale=4,
             encoder=dict(
                 type='DetrTransformerEncoder',
                 num_layers=3,
@@ -196,6 +196,7 @@ db_sampler = dict(
         load_dim=5,
         use_dim=[0, 1, 2, 3, 4],
         file_client_args=file_client_args))
+
 ida_aug_conf = {
     "resize_lim": (0.8, 1.0),
     "final_dim": (512, 1408),
@@ -205,6 +206,7 @@ ida_aug_conf = {
     "W": 1600,
     "rand_flip": True,
 }
+
 train_pipeline = [
     dict(type='LoadMultiViewImageFromFiles', to_float32=True),
     dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True, with_attr_label=False),

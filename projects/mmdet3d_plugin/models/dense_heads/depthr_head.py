@@ -456,11 +456,13 @@ class DepthrHead(AnchorFreeHead):
             # gt_depth_maps: [B, N, H, W]
             # print(f'x.shape: {x.shape}')
             gt_depth_maps, gt_bboxes_2d = self.get_depth_map_and_gt_bboxes_2d(
-                gt_bboxes_3d,
-                img_metas,
-                # pred_depth_map_logits.shape[-2:],
-                x.shape[-2:],
+                gt_bboxes_list=gt_bboxes_3d,
+                img_metas=img_metas,
+                # depth_maps_shape=pred_depth_map_logits.shape[-2:],
+                depth_maps_shape=x.shape[-2:],
                 target=True,
+                x=x,
+                depth_maps_down_scale=8,
             )
             gt_depth_maps = gt_depth_maps.to(x.device)
             # print(f'gt_depth_maps: {gt_depth_maps.shape}')
@@ -474,13 +476,13 @@ class DepthrHead(AnchorFreeHead):
                     pos=None,
                     gt_depth_maps=gt_depth_maps,
                 )
-            else:
-                pred_depth_map_logits, depth_pos_embed, weighted_depth = self.depth_gt_encoder(
-                    mlvl_feats=mlvl_feats,
-                    mask=None,
-                    pos=None,
-                    gt_depth_maps=None,
-                )
+            # else:
+            #     pred_depth_map_logits, depth_pos_embed, weighted_depth = self.depth_gt_encoder(
+            #         mlvl_feats=mlvl_feats,
+            #         mask=None,
+            #         pos=None,
+            #         gt_depth_maps=None,
+            #     )
 
         # out_dec: [num_layers, num_query, bs, dim]
         outs_dec, _ = self.transformer(
@@ -533,6 +535,8 @@ class DepthrHead(AnchorFreeHead):
         img_metas: List[Dict[str, torch.Tensor]],
         depth_maps_shape: Tuple[int],
         target=True,
+        x=torch.Tensor,
+        depth_maps_down_scale=8,
     ) -> Tuple[torch.Tensor, List[List[torch.Tensor]]]:
         """Get depth map and the 2D ground truth bboxes.
         Args:
@@ -549,9 +553,14 @@ class DepthrHead(AnchorFreeHead):
                 [[gt_bboxes_tensor_camera_0, gt_bboxes_tensor_camera_1, ..., gt_bboxes_tensor_camera_n] (sample 0),
                  [gt_bboxes_tensor_camera_0, gt_bboxes_tensor_camera_1, ..., gt_bboxes_tensor_camera_n] (sample 1),
                  ...].
+            target: Parameter for depth_utils.bin_depths default: True
+            x: the original input image feature map
+            depth_maps_down_scale: down scale of gt_depth_maps default: 8
         """
         img_H, img_W, _ = img_metas[0]['img_shape'][0]
-        depth_map_H, depth_map_W = depth_maps_shape
+        # depth_map_H, depth_map_W = depth_maps_shape
+        depth_map_H, depth_map_W = img_H // depth_maps_down_scale, img_W // depth_maps_down_scale
+
         gt_depth_maps = []
         gt_bboxes_2d = []
 
@@ -563,11 +572,20 @@ class DepthrHead(AnchorFreeHead):
             # print(f'gt_bboxes: {gt_bboxes}')
             # print(img_meta['lidar2img'])
             # print(f'img_meta: {img_meta}')
+            
+            # Check the gt_bboxes.tensor in case the empty bboxes
+            # new version of mmdetection3d do not provide empety tensor
+            if len(gt_bboxes.tensor) != 0:
+                # [num_objects, 8, 3]
+                gt_bboxes_corners = gt_bboxes.corners
+                # [num_objects, 3].
+                gt_bboxes_centers = gt_bboxes.gravity_center
+            else:
+                # [num_objects, 8, 3]
+                gt_bboxes_corners = torch.empty([0, 8, 3], device=x.device)
+                # [num_objects, 3].
+                gt_bboxes_centers = torch.empty([0, 3], device=x.device)
 
-            # [num_objects, 8, 3]
-            gt_bboxes_corners = gt_bboxes.corners
-            # [num_objects, 3].
-            gt_bboxes_centers = gt_bboxes.gravity_center
             # [num_cameras, 3, 4]
             lidar2img = gt_bboxes_centers.new_tensor([img_meta['lidar2img']
                                                       for img_meta in img_metas]).squeeze(0).to(gt_bboxes_corners.device)[:, :3]
