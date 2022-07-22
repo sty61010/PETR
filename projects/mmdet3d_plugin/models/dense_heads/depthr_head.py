@@ -13,11 +13,25 @@ import torch.nn.functional as F
 from mmcv.cnn import Conv2d, Linear, bias_init_with_prob
 from mmcv.cnn.bricks.transformer import build_positional_encoding
 from mmcv.runner import force_fp32
+from typing import (
+    Dict,
+    List,
+    Tuple,
+    Optional
+)
 from mmdet.core import (
-    # bbox_cxcywh_to_xyxy, bbox_xyxy_to_cxcywh,
-    build_assigner, build_sampler, multi_apply, reduce_mean)
+    # bbox_cxcywh_to_xyxy,
+    # bbox_xyxy_to_cxcywh,
+    build_assigner,
+    build_sampler,
+    multi_apply,
+    reduce_mean,
+)
 from mmdet.models.utils import build_transformer
-from mmdet.models import HEADS, build_loss
+from mmdet.models import (
+    HEADS,
+    build_loss,
+)
 from mmdet.models.dense_heads.anchor_free_head import AnchorFreeHead
 from mmdet.models.utils.transformer import inverse_sigmoid
 from mmdet3d.core.bbox.coders import build_bbox_coder
@@ -28,7 +42,6 @@ import math
 from mmdet.models.utils import NormedLinear
 
 from projects.mmdet3d_plugin.models.utils import depth_utils
-from typing import Dict, List, Tuple
 from mmdet3d.models.builder import build_neck
 from mmdet3d.core.bbox.structures.lidar_box3d import LiDARInstance3DBoxes
 
@@ -77,6 +90,15 @@ class DepthrHead(AnchorFreeHead):
             transformer head.
         init_cfg (dict or list[dict], optional): Initialization config dict.
             Default: None
+
+        depth_predictor (obj:`ConfigDict`): ConfigDict is used for building
+            depth_predictor, which use feature map to predict weight depth
+            distribution and depth embedding.
+            `Optional[ConfigDict]`
+        depth_gt_encoder (obj:`ConfigDict`): ConfigDict is used for building
+            deoth_gt_encoder, which use convolutional layer to suppress gt_depth_maps
+            to gt_depth_embedding.
+            `Optional[ConfigDict]`
     """
     _version = 2
 
@@ -219,7 +241,20 @@ class DepthrHead(AnchorFreeHead):
         self.bbox_coder = build_bbox_coder(bbox_coder)
         self.pc_range = self.bbox_coder.pc_range
 
-        # Operation for depth embedding
+        """
+        Operation for depth embedding
+            depth_bin_cfg: Config for depth_utils.bin_depths
+            depth_predictor (obj:`ConfigDict`): ConfigDict is used for building
+                depth_predictor, which use feature map to predict weight depth
+                distribution and depth embedding.
+                `Optional[ConfigDict]`
+            depth_gt_encoder (obj:`ConfigDict`): ConfigDict is used for building
+                deoth_gt_encoder, which use convolutional layer to suppress gt_depth_maps
+                to gt_depth_embedding.
+                `Optional[ConfigDict]`
+        """
+        self.depth_gt_encoder = None
+        self.depth_bin_cfg = None
         if depth_gt_encoder is not None:
             self.depth_gt_encoder = build_neck(depth_gt_encoder)
             self.depth_bin_cfg = dict(
@@ -228,9 +263,6 @@ class DepthrHead(AnchorFreeHead):
                 depth_max=depth_gt_encoder.get("depth_max"),
                 num_depth_bins=depth_gt_encoder.get("num_depth_bins"),
             )
-        else:
-            self.depth_gt_encoder = None
-            self.depth_bin_cfg = None
 
         self._init_layers()
 
@@ -394,6 +426,10 @@ class DepthrHead(AnchorFreeHead):
             mlvl_feats (tuple[Tensor]): Features from the upstream
                 network, each is a 5D-tensor with shape
                 (B, N, C, H, W).
+
+            img_metas: A list of dict containing the `lidar2img` tensor.
+            gt_bboxes_3d: The ground truth list of `LiDARInstance3DBoxes`.
+
         Returns:
             all_cls_scores (Tensor): Outputs from the classification head, \
                 shape [nb_dec, bs, num_query, cls_out_channels]. Note \
@@ -454,7 +490,6 @@ class DepthrHead(AnchorFreeHead):
 
         if gt_bboxes_3d is not None:
             # gt_depth_maps: [B, N, H, W]
-            # print(f'x.shape: {x.shape}')
             gt_depth_maps, gt_bboxes_2d = self.get_depth_map_and_gt_bboxes_2d(
                 gt_bboxes_list=gt_bboxes_3d,
                 img_metas=img_metas,
@@ -476,13 +511,6 @@ class DepthrHead(AnchorFreeHead):
                     pos=None,
                     gt_depth_maps=gt_depth_maps,
                 )
-            # else:
-            #     pred_depth_map_logits, depth_pos_embed, weighted_depth = self.depth_gt_encoder(
-            #         mlvl_feats=mlvl_feats,
-            #         mask=None,
-            #         pos=None,
-            #         gt_depth_maps=None,
-            #     )
 
         # out_dec: [num_layers, num_query, bs, dim]
         outs_dec, _ = self.transformer(
@@ -533,16 +561,23 @@ class DepthrHead(AnchorFreeHead):
         self,
         gt_bboxes_list: List[LiDARInstance3DBoxes],
         img_metas: List[Dict[str, torch.Tensor]],
-        depth_maps_shape: Tuple[int],
-        target=True,
-        x=torch.Tensor,
-        depth_maps_down_scale=8,
+        depth_maps_shape: Optional[Tuple[int]] = None,
+        target: Optional[bool] = True,
+        x: Optional[torch.Tensor] = None,
+        depth_maps_down_scale: Optional[int] = 8,
     ) -> Tuple[torch.Tensor, List[List[torch.Tensor]]]:
         """Get depth map and the 2D ground truth bboxes.
         Args:
             gt_bboxes_list: The ground truth list of `LiDARInstance3DBoxes`.
             img_metas: A list of dict containing the `lidar2img` tensor.
             depth_maps_shape: The shape (height, width) of the depth map.
+            `Optional[Tuple[int]]`
+            target: Parameter for depth_utils.bin_depths default: True
+            `Optional[bool] = True`
+            x: the original input image feature map, to provide device to create tensor
+            `Optional[torch.Tensor]: [B, N, C, H, W]`
+            depth_maps_down_scale: down scale of gt_depth_maps default: 8
+            `Optiona[int] = 8`
         Returns:
             gt_depth_maps: Thr ground truth depth maps with shape
                 [batch, num_cameras, depth_map_H, depth_map_W, num_depth_bins].
@@ -553,9 +588,6 @@ class DepthrHead(AnchorFreeHead):
                 [[gt_bboxes_tensor_camera_0, gt_bboxes_tensor_camera_1, ..., gt_bboxes_tensor_camera_n] (sample 0),
                  [gt_bboxes_tensor_camera_0, gt_bboxes_tensor_camera_1, ..., gt_bboxes_tensor_camera_n] (sample 1),
                  ...].
-            target: Parameter for depth_utils.bin_depths default: True
-            x: the original input image feature map
-            depth_maps_down_scale: down scale of gt_depth_maps default: 8
         """
         img_H, img_W, _ = img_metas[0]['img_shape'][0]
         # depth_map_H, depth_map_W = depth_maps_shape
@@ -572,7 +604,7 @@ class DepthrHead(AnchorFreeHead):
             # print(f'gt_bboxes: {gt_bboxes}')
             # print(img_meta['lidar2img'])
             # print(f'img_meta: {img_meta}')
-            
+
             # Check the gt_bboxes.tensor in case the empty bboxes
             # new version of mmdetection3d do not provide empety tensor
             if len(gt_bboxes.tensor) != 0:
