@@ -24,15 +24,17 @@ input_modality = dict(
     use_map=False,
     use_external=False,
 )
+embed_dims = 256
+num_levels = 1
 
 model = dict(
-    type='Petr3D',
+    type='Depthr3D',
     use_grid_mask=True,
     img_backbone=dict(
         type='ResNet',
         depth=50,
         num_stages=4,
-        out_indices=(2, 3,),
+        out_indices=(3,),
         frozen_stages=-1,
         norm_cfg=dict(type='BN2d', requires_grad=False),
         norm_eval=True,
@@ -42,35 +44,70 @@ model = dict(
         stage_with_dcn=(False, False, True, True),
         pretrained='ckpts/resnet50_msra-5891d200.pth',
     ),
-    img_neck=dict(
-        type='CPFPN',
-        in_channels=[1024, 2048],
-        out_channels=256,
-        num_outs=2),
     pts_bbox_head=dict(
-        type='PETRHead',
+        type='DepthrHead',
         num_classes=10,
-        in_channels=256,
+        in_channels=2048,
         num_query=900,
         LID=True,
         with_position=True,
         with_multiview=True,
         position_range=[-61.2, -61.2, -10.0, 61.2, 61.2, 10.0],
         normedlinear=False,
+
+        depth_gt_encoder=dict(
+            type='DepthGTEncoder',
+            num_depth_bins=80,
+            depth_min=1e-3,
+            depth_max=60.0,
+            embed_dims=embed_dims,
+            num_levels=num_levels,
+            depth_gt_encoder_down_scale=4,
+            encoder=dict(
+                type='DetrTransformerEncoder',
+                num_layers=3,
+                transformerlayers=dict(
+                    type='BaseTransformerLayer',
+                    attn_cfgs=[
+                        dict(
+                            type='MultiheadAttention',
+                            embed_dims=embed_dims,
+                            num_heads=8,
+                            dropout=0.1)
+                    ],
+                    feedforward_channels=256,
+                    ffn_dropout=0.1,
+                    operation_order=(
+                        'self_attn', 'norm',
+                        'ffn', 'norm',
+                    )
+                )
+            ),
+        ),
+
         transformer=dict(
-            type='PETRTransformer',
+            type='DepthrTransformer',
             decoder=dict(
-                type='PETRTransformerDecoder',
+                type='DepthrTransformerDecoder',
                 return_intermediate=True,
                 num_layers=6,
                 transformerlayers=dict(
-                    type='PETRTransformerDecoderLayer',
+                    # type='DepthrTransformerDecoderLayer',
+                    type='MultiAttentionDecoderLayer',
+
                     attn_cfgs=[
                         dict(
                             type='MultiheadAttention',
                             embed_dims=256,
                             num_heads=8,
                             dropout=0.1),
+
+                        dict(
+                            type='MultiheadAttention',
+                            embed_dims=256,
+                            num_heads=8,
+                            dropout=0.1),
+
                         dict(
                             type='PETRMultiheadAttention',
                             embed_dims=256,
@@ -82,8 +119,9 @@ model = dict(
                     with_cp=True,
                     operation_order=(
                         'self_attn', 'norm',
-                        'cross_attn', 'norm',
-                        'ffn', 'norm'
+                        'cross_depth_attn', 'norm',
+                        'cross_view_attn', 'norm',
+                        'ffn', 'norm',
                     )
                 ),
             )),
@@ -116,8 +154,7 @@ model = dict(
             cls_cost=dict(type='FocalLossCost', weight=2.0),
             reg_cost=dict(type='BBox3DL1Cost', weight=0.25),
             iou_cost=dict(type='IoUCost', weight=0.0),  # Fake cost. This is just to make it compatible with DETR head.
-            pc_range=point_cloud_range
-        ))))
+            pc_range=point_cloud_range))))
 
 dataset_type = 'CustomNuScenesDataset'
 data_root = 'data/nuscenes/'
@@ -192,7 +229,13 @@ train_pipeline = [
 ]
 test_pipeline = [
     dict(type='LoadMultiViewImageFromFiles', to_float32=True),
+
+    dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True, with_attr_label=False),
+    dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
+    dict(type='ObjectNameFilter', classes=class_names),
+
     dict(type='ResizeCropFlipImage', data_aug_conf=ida_aug_conf, training=False),
+
     dict(type='NormalizeMultiviewImage', **img_norm_cfg),
     dict(type='PadMultiViewImage', size_divisor=32),
     dict(
@@ -205,7 +248,11 @@ test_pipeline = [
                 type='DefaultFormatBundle3D',
                 class_names=class_names,
                 with_label=False),
-            dict(type='Collect3D', keys=['img'])
+            dict(
+                type='Collect3D',
+                keys=['gt_bboxes_3d', 'gt_labels_3d', 'img'],
+            ),
+            # dict(type='Collect3D', keys=['img'])
         ])
 ]
 
@@ -228,7 +275,7 @@ data = dict(
         type=dataset_type,
         pipeline=test_pipeline,
         classes=class_names,
-        modality=input_modality,
+        modality=input_modality
     ),
     test=dict(
         type=dataset_type,
@@ -260,30 +307,32 @@ lr_config = dict(
 )
 total_epochs = 24
 evaluation = dict(interval=1, pipeline=test_pipeline)
-find_unused_parameters = False
+find_unused_parameters = True
 
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 load_from = None
 resume_from = None
 
-# mAP: 0.3174
-# mATE: 0.8397
-# mASE: 0.2796
-# mAOE: 0.6158
-# mAVE: 0.9543
-# mAAE: 0.2326
-# NDS: 0.3665
-# Eval time: 199.1s
+# 5 gpus
+# mAP: 0.3825
+# mATE: 0.5540
+# mASE: 0.2832
+# mAOE: 1.0654
+# mAVE: 1.2124
+# mAAE: 0.4029
+# NDS: 0.3672
+# Eval time: 192.6s
 
 # Per-class results:
 # Object Class    AP      ATE     ASE     AOE     AVE     AAE
-# car     0.503   0.607   0.155   0.120   1.107   0.241
-# truck   0.259   0.874   0.232   0.217   0.968   0.261
-# bus     0.329   0.864   0.219   0.188   2.289   0.411
-# trailer 0.105   1.143   0.253   0.548   0.400   0.104
-# construction_vehicle    0.071   1.233   0.503   1.216   0.122   0.349
-# pedestrian      0.407   0.735   0.294   1.016   0.770   0.313
-# motorcycle      0.294   0.810   0.277   0.901   1.471   0.146
-# bicycle 0.290   0.698   0.260   1.176   0.509   0.036
-# traffic_cone    0.497   0.608   0.322   nan     nan     nan
-# barrier 0.419   0.824   0.281   0.160   nan     nan
+# car     0.663   0.412   0.138   0.674   2.084   0.483
+# truck   0.254   0.595   0.230   1.051   1.403   0.403
+# bus     0.300   0.600   0.220   0.806   2.631   0.731
+# trailer 0.179   0.898   0.261   0.855   0.516   0.225
+# construction_vehicle    0.186   0.612   0.418   1.559   0.142   0.333
+# pedestrian      0.619   0.461   0.273   1.480   0.925   0.619
+# motorcycle      0.146   0.452   0.381   1.412   1.737   0.389
+# bicycle 0.296   0.429   0.325   1.495   0.262   0.039
+# traffic_cone    0.573   0.495   0.306   nan     nan     nan
+# barrier 0.608   0.586   0.281   0.257   nan     nan
+# 2022-07-21 05: 40: 27, 020 - mmdet - INFO - Exp name: depthr_r50dcn_c5_512_1408_gtdepth.py

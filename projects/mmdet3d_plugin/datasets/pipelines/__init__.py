@@ -8,14 +8,22 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 # ------------------------------------------------------------------------
 from .transform_3d import (
-    PadMultiViewImage, NormalizeMultiviewImage, 
-    PhotoMetricDistortionMultiViewImage, 
+    PadMultiViewImage,
+    NormalizeMultiviewImage,
+    PhotoMetricDistortionMultiViewImage,
     ResizeMultiview3D,
     AlbuMultiview3D,
     ResizeCropFlipImage,
     GlobalRotScaleTransImage
-    )
+)
 from .loading import LoadMultiViewImageFromMultiSweepsFiles
 __all__ = [
-    'PadMultiViewImage', 'NormalizeMultiviewImage', 'PhotoMetricDistortionMultiViewImage', 'LoadMultiViewImageFromMultiSweepsFiles',
-    'ResizeMultiview3D','AlbuMultiview3D','ResizeCropFlipImage','GlobalRotScaleTransImage']
+    'PadMultiViewImage',
+    'NormalizeMultiviewImage',
+    'PhotoMetricDistortionMultiViewImage',
+    'LoadMultiViewImageFromMultiSweepsFiles',
+    'ResizeMultiview3D',
+    'AlbuMultiview3D',
+    'ResizeCropFlipImage',
+    'GlobalRotScaleTransImage'
+]

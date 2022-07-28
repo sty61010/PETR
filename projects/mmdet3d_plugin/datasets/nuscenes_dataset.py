@@ -10,13 +10,14 @@
 import numpy as np
 from mmdet.datasets import DATASETS
 from mmdet3d.datasets import NuScenesDataset
-import os
+
 
 @DATASETS.register_module()
 class CustomNuScenesDataset(NuScenesDataset):
     r"""NuScenes Dataset.
     This datset only add camera intrinsics and extrinsics to the results.
     """
+
     def get_data_info(self, index):
         """Get data info according to the given index.
         Args:
@@ -76,7 +77,7 @@ class CustomNuScenesDataset(NuScenesDataset):
                     extrinsics=extrinsics
                 ))
 
-        if not self.test_mode:
-            annos = self.get_ann_info(index)
-            input_dict['ann_info'] = annos
+        # if not self.test_mode:
+        annos = self.get_ann_info(index)
+        input_dict['ann_info'] = annos
         return input_dict
