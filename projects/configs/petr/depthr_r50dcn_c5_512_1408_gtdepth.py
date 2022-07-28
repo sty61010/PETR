@@ -313,6 +313,7 @@ runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 load_from = None
 resume_from = None
 
+# 5 gpus
 # mAP: 0.3825
 # mATE: 0.5540
 # mASE: 0.2832
