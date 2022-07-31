@@ -267,11 +267,11 @@ class MultiAttentionDecoderLayer(BaseModule):
                 identity = query
 
             elif layer == 'cross_depth_attn':
-                key = value = depth_pos_embed
+                temp_key = temp_value = depth_pos_embed
                 query = self.attentions[attn_index](
                     query,
-                    key,
-                    value,
+                    temp_key,
+                    temp_value,
                     identity if self.pre_norm else None,
                     query_pos=query_pos,
                     key_pos=depth_pos_embed,

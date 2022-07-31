@@ -256,6 +256,7 @@ test_pipeline = [
         ])
 ]
 
+data_length = 6000
 data = dict(
     samples_per_gpu=1,
     workers_per_gpu=4,
@@ -270,7 +271,8 @@ data = dict(
         use_valid_flag=True,
         # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
         # and box_type_3d='Depth' in sunrgbd and scannet dataset.
-        box_type_3d='LiDAR'),
+        box_type_3d='LiDAR',
+        data_length=data_length),
     val=dict(
         type=dataset_type,
         pipeline=test_pipeline,
@@ -307,7 +309,7 @@ lr_config = dict(
 )
 total_epochs = 24
 evaluation = dict(interval=1, pipeline=test_pipeline)
-find_unused_parameters = True
+find_unused_parameters = False
 
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 load_from = None

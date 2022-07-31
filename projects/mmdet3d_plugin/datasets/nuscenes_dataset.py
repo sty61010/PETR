@@ -15,8 +15,38 @@ from mmdet3d.datasets import NuScenesDataset
 @DATASETS.register_module()
 class CustomNuScenesDataset(NuScenesDataset):
     r"""NuScenes Dataset.
-    This datset only add camera intrinsics and extrinsics to the results.
+    This datset adds camera intrinsics and extrinsics to the results, and supports custom dataset length.
     """
+
+    def __init__(self,
+                 ann_file,
+                 pipeline=None,
+                 data_root=None,
+                 classes=None,
+                 load_interval=1,
+                 with_velocity=True, modality=None,
+                 box_type_3d='LiDAR',
+                 filter_empty_gt=True,
+                 test_mode=False,
+                 eval_version='detection_cvpr_2019',
+                 use_valid_flag=False,
+                 data_length=None):
+        super().__init__(ann_file,
+                         pipeline,
+                         data_root,
+                         classes,
+                         load_interval,
+                         with_velocity,
+                         modality,
+                         box_type_3d,
+                         filter_empty_gt,
+                         test_mode,
+                         eval_version,
+                         use_valid_flag)
+        # set group flag for the sampler
+        if not self.test_mode:
+            self.data_infos = self.data_infos[:data_length]
+            self._set_group_flag()
 
     def get_data_info(self, index):
         """Get data info according to the given index.
