@@ -258,7 +258,7 @@ test_pipeline = [
 
 data_length = 60000
 data = dict(
-    samples_per_gpu=1,
+    samples_per_gpu=2,
     workers_per_gpu=4,
     train=dict(
         type=dataset_type,
@@ -316,7 +316,7 @@ runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 load_from = None
 resume_from = None
 
-# 5 gpus
+# 5 gpus bs=2
 # mAP: 0.3825
 # mATE: 0.5540
 # mASE: 0.2832
