@@ -62,27 +62,8 @@ model = dict(
             depth_max=60.0,
             embed_dims=embed_dims,
             num_levels=num_levels,
+            gt_depth_maps_down_scale=8,
             depth_gt_encoder_down_scale=4,
-            encoder=dict(
-                type='DetrTransformerEncoder',
-                num_layers=3,
-                transformerlayers=dict(
-                    type='BaseTransformerLayer',
-                    attn_cfgs=[
-                        dict(
-                            type='MultiheadAttention',
-                            embed_dims=embed_dims,
-                            num_heads=8,
-                            dropout=0.1)
-                    ],
-                    feedforward_channels=256,
-                    ffn_dropout=0.1,
-                    operation_order=(
-                        'self_attn', 'norm',
-                        'ffn', 'norm',
-                    )
-                )
-            ),
         ),
 
         transformer=dict(

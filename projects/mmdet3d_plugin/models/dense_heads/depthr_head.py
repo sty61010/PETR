@@ -253,8 +253,11 @@ class DepthrHead(AnchorFreeHead):
                 to gt_depth_embedding.
                 `Optional[ConfigDict]`
         """
-        self.depth_gt_encoder = None
         self.depth_bin_cfg = None
+        self.depth_gt_encoder = None
+        self.depth_maps_down_scale = 8
+        self.gt_depth_maps_down_scale = 8
+
         if depth_gt_encoder is not None:
             self.depth_gt_encoder = build_neck(depth_gt_encoder)
             self.depth_bin_cfg = dict(
@@ -263,6 +266,7 @@ class DepthrHead(AnchorFreeHead):
                 depth_max=depth_gt_encoder.get("depth_max"),
                 num_depth_bins=depth_gt_encoder.get("num_depth_bins"),
             )
+            self.gt_depth_maps_down_scale = depth_gt_encoder.get("gt_depth_maps_down_scale")
 
         self._init_layers()
 
@@ -431,12 +435,13 @@ class DepthrHead(AnchorFreeHead):
             gt_bboxes_3d: The ground truth list of `LiDARInstance3DBoxes`.
 
         Returns:
-            all_cls_scores (Tensor): Outputs from the classification head, \
-                shape [nb_dec, bs, num_query, cls_out_channels]. Note \
+            all_cls_scores (Tensor): Outputs from the classification head,
+                shape [nb_dec, bs, num_query, cls_out_channels]. Note
                 cls_out_channels should includes background.
-            all_bbox_preds (Tensor): Sigmoid outputs from the regression \
-                head with normalized coordinate format (cx, cy, w, l, cz, h, theta, vx, vy). \
-                Shape [nb_dec, bs, num_query, 9].
+            all_bbox_preds(torch.Tensor): Sigmoid outputs from the regression
+                head with normalized coordinate format
+                (cx, cy, w, l, cz, h, rot_sine, rot_cosine, vx, vy).
+                `[num_layer, B, num_queries, 10]`
         """
 
         x = mlvl_feats[0]
@@ -486,31 +491,27 @@ class DepthrHead(AnchorFreeHead):
 
         # Operations for depth embedding
         depth_pos_embed = None
-        gt_depth_maps = None
 
-        if gt_bboxes_3d is not None:
+        if self.depth_gt_encoder is not None:
+            assert gt_bboxes_3d is not None
             # gt_depth_maps with depth_gt_encoder: [B, N, H, W, num_depth_bins], dtype: torch.float32
-            # gt_depth_maps with normal depth encoder: [B, N, H, W], dtype: torch.long
             gt_depth_maps, gt_bboxes_2d = self.get_depth_map_and_gt_bboxes_2d(
                 gt_bboxes_list=gt_bboxes_3d,
                 img_metas=img_metas,
-                # TODO: `target` should be true after removing depth_gt_encoder
-                target=(self.depth_gt_encoder is None),
-                device=x.device,
-                depth_maps_down_scale=8,
+                target=False,
+                device=mlvl_feats[0].device,
+                depth_maps_down_scale=self.gt_depth_maps_down_scale,
             )
-            gt_depth_maps = gt_depth_maps.to(x.device)
+            gt_depth_maps = gt_depth_maps.to(mlvl_feats[0].device)
             # print(f'gt_depth_maps: {gt_depth_maps.shape}')
-
-        if self.depth_gt_encoder is not None:
-            if gt_depth_maps is not None:
-                # print(f'gt_depth_maps: {gt_depth_maps.shape[:]}')
-                pred_depth_map_logits, depth_pos_embed, weighted_depth = self.depth_gt_encoder(
-                    mlvl_feats=mlvl_feats,
-                    mask=None,
-                    pos=None,
-                    gt_depth_maps=gt_depth_maps,
-                )
+            # We do not need pred_depth_map_logits and weighted_depth to compute
+            # loss_ddn when using gt_depth_maps
+            _, depth_pos_embed, _ = self.depth_gt_encoder(
+                mlvl_feats=mlvl_feats,
+                mask=None,
+                pos=None,
+                gt_depth_maps=gt_depth_maps,
+            )
 
         # out_dec: [num_layers, num_query, bs, dim]
         outs_dec, _ = self.transformer(
@@ -729,8 +730,10 @@ class DepthrHead(AnchorFreeHead):
             cls_score (Tensor): Box score logits from a single decoder layer
                 for one image. Shape [num_query, cls_out_channels].
             bbox_pred (Tensor): Sigmoid outputs from a single decoder layer
-                for one image, with normalized coordinate (cx, cy, w, h) and
-                shape [num_query, 4].
+                for 6 images(single sample), Outputs from the regression head with
+                normalized coordinate format
+                (cx, cy, w, l, cz, h, rot_sine, rot_cosine, vx, vy).
+                `[num_queries, 10]`
             gt_bboxes (Tensor): Ground truth bboxes for one image with
                 shape (num_gts, 4) in [tl_x, tl_y, br_x, br_y] format.
             gt_labels (Tensor): Ground truth class indices for one image
@@ -787,8 +790,10 @@ class DepthrHead(AnchorFreeHead):
                 decoder layer for each image with shape [num_query,
                 cls_out_channels].
             bbox_preds_list (list[Tensor]): Sigmoid outputs from a single
-                decoder layer for each image, with normalized coordinate
-                (cx, cy, w, h) and shape [num_query, 4].
+                decoder layer for each sample, with normalized coordinate
+                normalized coordinate format
+                (cx, cy, w, l, cz, h, rot_sine, rot_cosine, vx, vy).
+                `[num_queries, 10]`
             gt_bboxes_list (list[Tensor]): Ground truth bboxes for each image
                 with shape (num_gts, 4) in [tl_x, tl_y, br_x, br_y] format.
             gt_labels_list (list[Tensor]): Ground truth class indices for each
@@ -837,8 +842,10 @@ class DepthrHead(AnchorFreeHead):
             cls_scores (Tensor): Box score logits from a single decoder layer
                 for all images. Shape [bs, num_query, cls_out_channels].
             bbox_preds (Tensor): Sigmoid outputs from a single decoder layer
-                for all images, with normalized coordinate (cx, cy, w, h) and
-                shape [bs, num_query, 4].
+                for all images(single sample), Outputs from the regression head with
+                normalized coordinate format
+                (cx, cy, w, l, cz, h, rot_sine, rot_cosine, vx, vy).
+                `[B, num_queries, 10]`
             gt_bboxes_list (list[Tensor]): Ground truth bboxes for each image
                 with shape (num_gts, 4) in [tl_x, tl_y, br_x, br_y] format.
             gt_labels_list (list[Tensor]): Ground truth class indices for each
@@ -908,11 +915,12 @@ class DepthrHead(AnchorFreeHead):
             preds_dicts:
                 all_cls_scores (Tensor): Classification score of all
                     decoder layers, has shape
-                    [nb_dec, bs, num_query, cls_out_channels].
-                all_bbox_preds (Tensor): Sigmoid regression
-                    outputs of all decode layers. Each is a 4D-tensor with
-                    normalized coordinate format (cx, cy, w, h) and shape
-                    [nb_dec, bs, num_query, 4].
+                    `[num_layer, bs, num_query, cls_out_channels]`.
+                all_bbox_preds(torch.Tensor): Sigmoid regression outputs
+                    of all decode layers. Outputs from the regression head with
+                    normalized coordinate format
+                    (cx, cy, w, l, cz, h, rot_sine, rot_cosine, vx, vy).
+                    `[num_layer, B, num_queries, 10]`
                 enc_cls_scores (Tensor): Classification scores of
                     points on encode feature map , has shape
                     (N, h*w, num_classes). Only be passed when as_two_stage is
