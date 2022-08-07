@@ -169,6 +169,7 @@ class MultiAttentionDecoderLayer(BaseModule):
                 # self_attn_args=Optional[dict()]=None,
                 # cross_attn_args=Optional[dict()]=None,
                 depth_pos_embed: Optional[Tensor] = None,
+                view_features: Optional[Tensor] = None,
                 **kwargs):
         """Forward function for `TransformerDecoderLayer`.
 
@@ -198,6 +199,11 @@ class MultiAttentionDecoderLayer(BaseModule):
                 shape [bs, num_keys]. Default: None.
             self_attn_args (Dict): Additional arguments passed to the self-attention module.
             cross_attn_args (Dict): Additional arguments passed to the cross-attention module.
+            depth_pos_embed (Tensor): depth embedding from gt_depth_maps or depth_predictor
+                shape `depth_pos_embed: [N*H*W, B, C]`
+            view_features (Tensor): features from multi-view image through backbone.
+                shape `view_features: [N*H*W, B, C]`
+`
         Returns:
             Tensor: forwarded results with shape [num_queries, bs, embed_dims].
         """
@@ -267,6 +273,7 @@ class MultiAttentionDecoderLayer(BaseModule):
                 identity = query
 
             elif layer == 'cross_depth_attn':
+                # depth_pos_embed: [N*H*W, B, C]
                 depth_key = depth_value = depth_pos_embed
                 query = self.attentions[attn_index](
                     query,
@@ -276,7 +283,7 @@ class MultiAttentionDecoderLayer(BaseModule):
                     query_pos=query_pos,
                     key_pos=depth_pos_embed,
                     attn_mask=attn_masks[attn_index],
-                    key_padding_mask=key_padding_mask,
+                    # key_padding_mask=key_padding_mask,
                     **kwargs)
                 attn_index += 1
                 identity = query

@@ -6,7 +6,10 @@
 # ------------------------------------------------------------------------
 from .cp_fpn import CPFPN
 from .depth_gt_encoder import DepthGTEncoder
+from .depth_predictor import DepthPredictor
+
 __all__ = [
     'CPFPN',
     'DepthGTEncoder',
+    'DepthPredictor',
 ]

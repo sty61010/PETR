@@ -298,25 +298,4 @@ load_from = None
 resume_from = None
 
 # 5 gpus
-# mAP: 0.3825
-# mATE: 0.5540
-# mASE: 0.2832
-# mAOE: 1.0654
-# mAVE: 1.2124
-# mAAE: 0.4029
-# NDS: 0.3672
-# Eval time: 192.6s
-
-# Per-class results:
-# Object Class    AP      ATE     ASE     AOE     AVE     AAE
-# car     0.663   0.412   0.138   0.674   2.084   0.483
-# truck   0.254   0.595   0.230   1.051   1.403   0.403
-# bus     0.300   0.600   0.220   0.806   2.631   0.731
-# trailer 0.179   0.898   0.261   0.855   0.516   0.225
-# construction_vehicle    0.186   0.612   0.418   1.559   0.142   0.333
-# pedestrian      0.619   0.461   0.273   1.480   0.925   0.619
-# motorcycle      0.146   0.452   0.381   1.412   1.737   0.389
-# bicycle 0.296   0.429   0.325   1.495   0.262   0.039
-# traffic_cone    0.573   0.495   0.306   nan     nan     nan
-# barrier 0.608   0.586   0.281   0.257   nan     nan
-# 2022-07-21 05: 40: 27, 020 - mmdet - INFO - Exp name: depthr_r50dcn_c5_512_1408_gtdepth.py
+# mAP: 0.3397

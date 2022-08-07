@@ -96,9 +96,14 @@ class DepthrHead(AnchorFreeHead):
             distribution and depth embedding.
             `Optional[ConfigDict]`
         depth_gt_encoder (obj:`ConfigDict`): ConfigDict is used for building
-            deoth_gt_encoder, which use convolutional layer to suppress gt_depth_maps
+            depth_gt_encoder, which use convolutional layer to suppress gt_depth_maps
             to gt_depth_embedding.
             `Optional[ConfigDict]`
+        loss_ddn (obj:`ConfigDict`): ConfigDict is used for building
+            loss_ddn, which use for the supervision of predicted depth maps
+            `Optional[ConfigDict]`
+        loss_depth (bool): whether to generate depth_ave from sampling predicted depth maps.
+            Default to False.
     """
     _version = 2
 
@@ -140,7 +145,10 @@ class DepthrHead(AnchorFreeHead):
                  position_range=[-65, -65, -8.0, 65, 65, 8.0],
                  init_cfg=None,
                  normedlinear=False,
+                 depth_predictor=None,
                  depth_gt_encoder=None,
+                 loss_ddn=None,
+                 loss_depth=False,
                  **kwargs):
         # NOTE here use `AnchorFreeHead` instead of `TransformerHead`,
         # since it brings inconvenience when the initialization of
@@ -254,9 +262,20 @@ class DepthrHead(AnchorFreeHead):
                 `Optional[ConfigDict]`
         """
         self.depth_bin_cfg = None
+        self.depth_predictor = None
         self.depth_gt_encoder = None
+        self.loss_ddn = None
         self.depth_maps_down_scale = 8
         self.gt_depth_maps_down_scale = 8
+
+        if depth_predictor is not None:
+            self.depth_predictor = build_neck(depth_predictor)
+            self.depth_bin_cfg = dict(
+                mode="LID",
+                depth_min=depth_predictor.get("depth_min"),
+                depth_max=depth_predictor.get("depth_max"),
+                num_depth_bins=depth_predictor.get("num_depth_bins"),
+            )
 
         if depth_gt_encoder is not None:
             self.depth_gt_encoder = build_neck(depth_gt_encoder)
@@ -267,6 +286,12 @@ class DepthrHead(AnchorFreeHead):
                 num_depth_bins=depth_gt_encoder.get("num_depth_bins"),
             )
             self.gt_depth_maps_down_scale = depth_gt_encoder.get("gt_depth_maps_down_scale")
+
+        if loss_ddn is not None:
+            self.loss_ddn = build_loss(loss_ddn)
+            self.depth_maps_down_scale = loss_ddn.get("downsample_factor")
+
+        self.loss_depth = loss_depth
 
         self._init_layers()
 
@@ -430,7 +455,6 @@ class DepthrHead(AnchorFreeHead):
             mlvl_feats (tuple[Tensor]): Features from the upstream
                 network, each is a 5D-tensor with shape
                 (B, N, C, H, W).
-
             img_metas: A list of dict containing the `lidar2img` tensor.
             gt_bboxes_3d: The ground truth list of `LiDARInstance3DBoxes`.
 
@@ -491,6 +515,18 @@ class DepthrHead(AnchorFreeHead):
 
         # Operations for depth embedding
         depth_pos_embed = None
+        pred_depth_map_logits = None
+        weighted_depth = None
+        if self.depth_predictor is not None:
+            # pred_depth_map_logits: [B, N, D, H, W]
+            # depth_pos_embed: [B, N, C, H, W]
+            # weighted_depth: [B, N, H, W]
+            pred_depth_map_logits, depth_pos_embed, weighted_depth = self.depth_predictor(
+                mlvl_feats=mlvl_feats,
+                mask=None,
+                pos=None,
+            )
+            # print(f'pred_depth_map_logits: {pred_depth_map_logits.shape[:]}')
 
         if self.depth_gt_encoder is not None:
             assert gt_bboxes_3d is not None
@@ -555,6 +591,8 @@ class DepthrHead(AnchorFreeHead):
             'all_bbox_preds': all_bbox_preds,
             'enc_cls_scores': None,
             'enc_bbox_preds': None,
+            'pred_depth_map_logits': pred_depth_map_logits,
+            'weighted_depth': weighted_depth,
         }
         return outs
 
@@ -840,7 +878,8 @@ class DepthrHead(AnchorFreeHead):
         feature level.
         Args:
             cls_scores (Tensor): Box score logits from a single decoder layer
-                for all images. Shape [bs, num_query, cls_out_channels].
+                for all images.
+                Shape `[B, num_query, cls_out_channels]`.
             bbox_preds (Tensor): Sigmoid outputs from a single decoder layer
                 for all images(single sample), Outputs from the regression head with
                 normalized coordinate format
@@ -857,11 +896,19 @@ class DepthrHead(AnchorFreeHead):
                 a single decoder layer.
         """
         num_imgs = cls_scores.size(0)
+
+        # Operation to transfrom from torch.Tensor[B, num_query, 10] to
+        # list(B) of torch.Tensor[num_query, 10]
+
+        # list(B) of tensor cls_scores_list: [num_queries, 10]
         cls_scores_list = [cls_scores[i] for i in range(num_imgs)]
+        # list(B) of tensor bbox_preds_list: [num_queries, 10]
         bbox_preds_list = [bbox_preds[i] for i in range(num_imgs)]
+
         cls_reg_targets = self.get_targets(cls_scores_list, bbox_preds_list,
                                            gt_bboxes_list, gt_labels_list,
                                            gt_bboxes_ignore_list)
+
         (labels_list, label_weights_list, bbox_targets_list, bbox_weights_list,
          num_total_pos, num_total_neg) = cls_reg_targets
         labels = torch.cat(labels_list, 0)
@@ -904,14 +951,19 @@ class DepthrHead(AnchorFreeHead):
     def loss(self,
              gt_bboxes_list,
              gt_labels_list,
+             img_metas,
              preds_dicts,
              gt_bboxes_ignore=None):
         """"Loss function.
         Args:
-            gt_bboxes_list (list[Tensor]): Ground truth bboxes for each image
-                with shape (num_gts, 4) in [tl_x, tl_y, br_x, br_y] format.
+            gt_bboxes_list (list[Tensor]): The ground truth list of
+            `LiDARInstance3DBoxes`.
+
             gt_labels_list (list[Tensor]): Ground truth class indices for each
                 image with shape (num_gts, ).
+
+            img_metas: A list of dict containing the `lidar2img` tensor.
+
             preds_dicts:
                 all_cls_scores (Tensor): Classification score of all
                     decoder layers, has shape
@@ -928,6 +980,11 @@ class DepthrHead(AnchorFreeHead):
                 enc_bbox_preds (Tensor): Regression results of each points
                     on the encode feature map, has shape (N, h*w, 4). Only be
                     passed when as_two_stage is True, otherwise is None.
+                pred_depth_map_logits (Tensor): one hot encoding to represent the predict depth_maps,
+                    in depth_gt_encoder default is None, defualt downsample to 1/32
+                    `[B, N, D, H, W]`
+                weighted_depth (Tensor): weight-sum value of predicted_depth_maps or gt_depth_maps
+                    `[B, N, H, W]`
             gt_bboxes_ignore (list[Tensor], optional): Bounding boxes
                 which can be ignored for each image. Default None.
         Returns:
@@ -936,19 +993,28 @@ class DepthrHead(AnchorFreeHead):
         assert gt_bboxes_ignore is None, \
             f'{self.__class__.__name__} only supports ' \
             f'for gt_bboxes_ignore setting to None.'
+        gt_bboxes_3d = gt_bboxes_list
 
+        # Operation from prediction
+
+        # all_cls_scores(torch.Tensor): [num_layer, B, num_queries, 10]
         all_cls_scores = preds_dicts['all_cls_scores']
+        # all_bbox_preds(torch.Tensor): [num_layer, B, num_queries, 10]
         all_bbox_preds = preds_dicts['all_bbox_preds']
+
         enc_cls_scores = preds_dicts['enc_cls_scores']
         enc_bbox_preds = preds_dicts['enc_bbox_preds']
 
+        # Operation from Ground True
         num_dec_layers = len(all_cls_scores)
         device = gt_labels_list[0].device
         gt_bboxes_list = [torch.cat(
             (gt_bboxes.gravity_center, gt_bboxes.tensor[:, 3:]),
             dim=1).to(device) for gt_bboxes in gt_bboxes_list]
 
+        # list(6 layer) of list(B) of tensor gt_labels_list: [num_objects, 9]
         all_gt_bboxes_list = [gt_bboxes_list for _ in range(num_dec_layers)]
+        # list(6 layer) of list(B) of tensor gt_labels_list: [num_objects,]
         all_gt_labels_list = [gt_labels_list for _ in range(num_dec_layers)]
         all_gt_bboxes_ignore_list = [
             gt_bboxes_ignore for _ in range(num_dec_layers)
@@ -961,6 +1027,8 @@ class DepthrHead(AnchorFreeHead):
 
         loss_dict = dict()
         # loss of proposal generated from encode feature map.
+        # print(f'enc_cls_scores: {enc_cls_scores}')
+        # enc_cls_scores is None
         if enc_cls_scores is not None:
             binary_labels_list = [
                 torch.zeros_like(gt_labels_list[i])
@@ -983,6 +1051,50 @@ class DepthrHead(AnchorFreeHead):
             loss_dict[f'd{num_dec_layer}.loss_cls'] = loss_cls_i
             loss_dict[f'd{num_dec_layer}.loss_bbox'] = loss_bbox_i
             num_dec_layer += 1
+
+        # Operation for depth_map surpervised
+        if self.loss_ddn is not None:
+            # loss from pred_depth_map_logits:
+            # pred_depth_map_logits: [B, N, D+1, H, W]
+            pred_depth_map_logits = preds_dicts['pred_depth_map_logits']
+            assert pred_depth_map_logits is not None
+            # print(f'pred_depth_map_logits: {pred_depth_map_logits.shape}')
+
+            # get gt_depth_maps:
+            # gt_depth_maps with depth_gt_encoder: [B, N, H, W, num_depth_bins], dtype: torch.float32
+            # gt_depth_maps with normal depth encoder: [B, N, H, W], dtype: torch.long
+            """
+                gt_depth_maps: Thr ground truth depth maps with shape
+                    [batch, num_cameras, depth_map_H, depth_map_W] if `target` is true.
+                    Otherwise, the shape is [batch, num_cameras, depth_map_H, depth_map_W, num_depth_bins].
+                gt_bboxes_2d: A list of list of tensor containing 2D ground truth bboxes(x, y, w, h)
+                    for each sample and each camera. Each tensor has shape [N_i, 4].
+                    Below is the brief explanation of a single batch:
+                    [B, N, ....]
+                    [[gt_bboxes_tensor_camera_0, gt_bboxes_tensor_camera_1, ..., gt_bboxes_tensor_camera_n](sample 0),
+                        [gt_bboxes_tensor_camera_0, gt_bboxes_tensor_camera_1, ..., gt_bboxes_tensor_camera_n](sample 1),
+                        ...].
+            """
+
+            gt_depth_maps, gt_bboxes_2d = self.get_depth_map_and_gt_bboxes_2d(
+                gt_bboxes_list=gt_bboxes_3d,
+                img_metas=img_metas,
+                # TODO: `target` should be true after removing depth_gt_encoder
+                target=(self.depth_gt_encoder is None),
+                device=device,
+                depth_maps_down_scale=self.depth_maps_down_scale,
+            )
+            gt_depth_maps = gt_depth_maps.to(device)
+            # print(f'gt_depth_maps: {gt_depth_maps.shape}')
+
+            loss_ddn = self.loss_ddn(
+                depth_logits=pred_depth_map_logits,
+                depth_target=gt_depth_maps,
+                gt_bboxes_2d=gt_bboxes_2d,
+            )
+            loss_dict['loss_ddn'] = loss_ddn
+        # print(f'loss_dict: {loss_dict}')
+
         return loss_dict
 
     @force_fp32(apply_to=('preds_dicts'))

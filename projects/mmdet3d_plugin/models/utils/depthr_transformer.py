@@ -112,6 +112,7 @@ class DepthrTransformer(BaseModule):
         # depth
         if depth_pos_embed is not None:
             # print(f'depth_pos_embed: {depth_pos_embed.shape}')
+            # defaut 1/32 embed size
             # depth_pos_embed: [B, N, C, H, W] -> [B, C, N, H, W]
             depth_pos_embed = depth_pos_embed.permute(0, 2, 1, 3, 4)
             # depth_pos_embed: [B, C, N, H, W] -> [B, C, N*H*W] -> [N*H*W, B, C]
@@ -125,7 +126,10 @@ class DepthrTransformer(BaseModule):
             key_pos=pos_embed,
             query_pos=query_embed,
             key_padding_mask=mask,
+            # depth_pos_embed: [N*H*W, B, C]
             depth_pos_embed=depth_pos_embed,
+            # view_features: [n*h*w, bs, c]
+            view_features=memory,
             reg_branch=reg_branch,
         )
         out_dec = out_dec.transpose(1, 2)

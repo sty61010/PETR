@@ -46,7 +46,8 @@ model = dict(
         type='CPFPN',
         in_channels=[1024, 2048],
         out_channels=256,
-        num_outs=2),
+        num_outs=2,
+    ),
     pts_bbox_head=dict(
         type='PETRHead',
         num_classes=10,
