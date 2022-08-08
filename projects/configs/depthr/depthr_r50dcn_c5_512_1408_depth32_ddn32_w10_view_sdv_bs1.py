@@ -10,6 +10,7 @@ plugin_dir = 'projects/mmdet3d_plugin/'
 # cloud range accordingly
 point_cloud_range = [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
 voxel_size = [0.2, 0.2, 8]
+
 img_norm_cfg = dict(
     mean=[103.530, 116.280, 123.675], std=[1.0, 1.0, 1.0], to_rgb=False)
 # For nuScenes we usually do 10-class detection
@@ -26,6 +27,8 @@ input_modality = dict(
 )
 embed_dims = 256
 num_levels = 1
+depth_maps_down_scale = 32
+head_in_channels = 2048
 
 model = dict(
     type='Depthr3D',
@@ -47,7 +50,7 @@ model = dict(
     pts_bbox_head=dict(
         type='DepthrHead',
         num_classes=10,
-        in_channels=2048,
+        in_channels=head_in_channels,
         num_query=900,
         LID=True,
         with_position=True,
@@ -55,15 +58,35 @@ model = dict(
         position_range=[-61.2, -61.2, -10.0, 61.2, 61.2, 10.0],
         normedlinear=False,
 
-        depth_gt_encoder=dict(
-            type='DepthGTEncoder',
+        depth_predictor=dict(
+            type='DepthPredictor',
             num_depth_bins=80,
             depth_min=1e-3,
             depth_max=60.0,
             embed_dims=embed_dims,
             num_levels=num_levels,
-            gt_depth_maps_down_scale=8,
-            depth_gt_encoder_down_scale=4,
+            in_channels=head_in_channels,
+            depth_maps_down_scale=depth_maps_down_scale,
+            encoder=dict(
+                type='DetrTransformerEncoder',
+                num_layers=1,
+                transformerlayers=dict(
+                    type='BaseTransformerLayer',
+                    attn_cfgs=[
+                        dict(
+                            type='MultiheadAttention',
+                            embed_dims=embed_dims,
+                            num_heads=8,
+                            dropout=0.1)
+                    ],
+                    feedforward_channels=256,
+                    ffn_dropout=0.1,
+                    operation_order=(
+                        'self_attn', 'norm',
+                        'ffn', 'norm',
+                    )
+                )
+            ),
         ),
 
         transformer=dict(
@@ -121,9 +144,26 @@ model = dict(
             use_sigmoid=True,
             gamma=2.0,
             alpha=0.25,
-            loss_weight=2.0),
-        loss_bbox=dict(type='L1Loss', loss_weight=0.25),
-        loss_iou=dict(type='GIoULoss', loss_weight=0.0)),
+            loss_weight=2.0,
+        ),
+        loss_bbox=dict(
+            type='L1Loss',
+            loss_weight=0.25,
+        ),
+        loss_iou=dict(
+            type='GIoULoss',
+            loss_weight=0.0,
+        ),
+        loss_ddn=dict(
+            type='DDNLoss',
+            alpha=0.25,
+            gamma=2.0,
+            fg_weight=13,
+            bg_weight=1,
+            downsample_factor=depth_maps_down_scale,
+            loss_weight=1.0,
+        ),
+    ),
     # model training and testing settings
     train_cfg=dict(pts=dict(
         grid_size=[512, 512, 1],
@@ -237,6 +277,7 @@ test_pipeline = [
         ])
 ]
 
+data_length = 60000
 data = dict(
     samples_per_gpu=1,
     workers_per_gpu=4,
@@ -251,7 +292,9 @@ data = dict(
         use_valid_flag=True,
         # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
         # and box_type_3d='Depth' in sunrgbd and scannet dataset.
-        box_type_3d='LiDAR'),
+        box_type_3d='LiDAR',
+        data_length=data_length,
+    ),
     val=dict(
         type=dataset_type,
         pipeline=test_pipeline,
@@ -288,32 +331,10 @@ lr_config = dict(
 )
 total_epochs = 24
 evaluation = dict(interval=1, pipeline=test_pipeline)
-find_unused_parameters = True
+find_unused_parameters = False
 
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 load_from = None
 resume_from = None
 
-# 5 gpus
-# mAP: 0.3825
-# mATE: 0.5540
-# mASE: 0.2832
-# mAOE: 1.0654
-# mAVE: 1.2124
-# mAAE: 0.4029
-# NDS: 0.3672
-# Eval time: 192.6s
-
-# Per-class results:
-# Object Class    AP      ATE     ASE     AOE     AVE     AAE
-# car     0.663   0.412   0.138   0.674   2.084   0.483
-# truck   0.254   0.595   0.230   1.051   1.403   0.403
-# bus     0.300   0.600   0.220   0.806   2.631   0.731
-# trailer 0.179   0.898   0.261   0.855   0.516   0.225
-# construction_vehicle    0.186   0.612   0.418   1.559   0.142   0.333
-# pedestrian      0.619   0.461   0.273   1.480   0.925   0.619
-# motorcycle      0.146   0.452   0.381   1.412   1.737   0.389
-# bicycle 0.296   0.429   0.325   1.495   0.262   0.039
-# traffic_cone    0.573   0.495   0.306   nan     nan     nan
-# barrier 0.608   0.586   0.281   0.257   nan     nan
-# 2022-07-21 05: 40: 27, 020 - mmdet - INFO - Exp name: depthr_r50dcn_c5_512_1408_gtdepth.py
+# 5 gpus bs=1

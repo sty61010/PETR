@@ -119,8 +119,12 @@ ckpts/
 data/
 mmdetection3d/
 exps/
+
 *~
 mmdet3d/.mim
+
+# TWCC
+*.out
 
 # Pytorch
 *.pth

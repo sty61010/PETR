@@ -10,7 +10,6 @@ plugin_dir = 'projects/mmdet3d_plugin/'
 # cloud range accordingly
 point_cloud_range = [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
 voxel_size = [0.2, 0.2, 8]
-
 img_norm_cfg = dict(
     mean=[103.530, 116.280, 123.675], std=[1.0, 1.0, 1.0], to_rgb=False)
 # For nuScenes we usually do 10-class detection
@@ -26,9 +25,7 @@ input_modality = dict(
     use_external=False,
 )
 embed_dims = 256
-num_levels = 2
-depth_maps_down_scale = 16
-head_in_channels = 256
+num_levels = 1
 
 model = dict(
     type='Depthr3D',
@@ -37,7 +34,7 @@ model = dict(
         type='ResNet',
         depth=50,
         num_stages=4,
-        out_indices=(2, 3,),
+        out_indices=(3,),
         frozen_stages=-1,
         norm_cfg=dict(type='BN2d', requires_grad=False),
         norm_eval=True,
@@ -47,16 +44,10 @@ model = dict(
         stage_with_dcn=(False, False, True, True),
         pretrained='ckpts/resnet50_msra-5891d200.pth',
     ),
-    img_neck=dict(
-        type='CPFPN',
-        in_channels=[1024, 2048],
-        out_channels=head_in_channels,
-        num_outs=2,
-    ),
     pts_bbox_head=dict(
         type='DepthrHead',
         num_classes=10,
-        in_channels=head_in_channels,
+        in_channels=2048,
         num_query=900,
         LID=True,
         with_position=True,
@@ -64,35 +55,15 @@ model = dict(
         position_range=[-61.2, -61.2, -10.0, 61.2, 61.2, 10.0],
         normedlinear=False,
 
-        depth_predictor=dict(
-            type='DepthPredictor',
+        depth_gt_encoder=dict(
+            type='DepthGTEncoder',
             num_depth_bins=80,
             depth_min=1e-3,
             depth_max=60.0,
             embed_dims=embed_dims,
             num_levels=num_levels,
-            in_channels=head_in_channels,
-            depth_maps_down_scale=depth_maps_down_scale,
-            encoder=dict(
-                type='DetrTransformerEncoder',
-                num_layers=1,
-                transformerlayers=dict(
-                    type='BaseTransformerLayer',
-                    attn_cfgs=[
-                        dict(
-                            type='MultiheadAttention',
-                            embed_dims=embed_dims,
-                            num_heads=8,
-                            dropout=0.1)
-                    ],
-                    feedforward_channels=256,
-                    ffn_dropout=0.1,
-                    operation_order=(
-                        'self_attn', 'norm',
-                        'ffn', 'norm',
-                    )
-                )
-            ),
+            gt_depth_maps_down_scale=8,
+            depth_gt_encoder_down_scale=4,
         ),
 
         transformer=dict(
@@ -150,26 +121,9 @@ model = dict(
             use_sigmoid=True,
             gamma=2.0,
             alpha=0.25,
-            loss_weight=2.0,
-        ),
-        loss_bbox=dict(
-            type='L1Loss',
-            loss_weight=0.25,
-        ),
-        loss_iou=dict(
-            type='GIoULoss',
-            loss_weight=0.0,
-        ),
-        loss_ddn=dict(
-            type='DDNLoss',
-            alpha=0.25,
-            gamma=2.0,
-            fg_weight=13,
-            bg_weight=1,
-            downsample_factor=depth_maps_down_scale,
-            loss_weight=2.0,
-        ),
-    ),
+            loss_weight=2.0),
+        loss_bbox=dict(type='L1Loss', loss_weight=0.25),
+        loss_iou=dict(type='GIoULoss', loss_weight=0.0)),
     # model training and testing settings
     train_cfg=dict(pts=dict(
         grid_size=[512, 512, 1],
@@ -343,4 +297,5 @@ runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 load_from = None
 resume_from = None
 
-# 5 gpus
+# 5 gpus bs=1
+# mAP: 0.3397
