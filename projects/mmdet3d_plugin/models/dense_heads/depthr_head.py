@@ -208,7 +208,7 @@ class DepthrHead(AnchorFreeHead):
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
         self.fp16_enabled = False
-        
+
         self.embed_dims = 256
         self.depth_step = depth_step
         self.depth_num = depth_num
