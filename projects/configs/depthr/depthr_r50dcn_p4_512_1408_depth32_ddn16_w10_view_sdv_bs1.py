@@ -347,4 +347,26 @@ runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 load_from = None
 resume_from = None
 
-# 5 gpus bs=1
+# 16 gpus bs=1 in TWCC
+# mAP: 0.2971
+# mATE: 0.8593
+# mASE: 0.7095
+# mAOE: 1.5595
+# mAVE: 1.1672
+# mAAE: 0.3284
+# NDS: 0.2588
+# Eval time: 212.4s
+
+# Per-class results:
+# Object Class    AP      ATE     ASE     AOE     AVE     AAE
+# car     0.483   0.630   0.750   1.582   1.542   0.318
+# truck   0.249   0.878   0.793   1.599   1.331   0.353
+# bus     0.305   0.900   0.859   1.554   2.612   0.541
+# trailer 0.086   1.173   0.843   1.551   0.519   0.104
+# construction_vehicle    0.053   1.172   0.708   1.555   0.124   0.372
+# pedestrian      0.397   0.747   0.328   1.561   0.853   0.484
+# motorcycle      0.270   0.812   0.793   1.606   1.706   0.353
+# bicycle 0.246   0.767   0.809   1.758   0.651   0.102
+# traffic_cone    0.471   0.667   0.324   nan     nan     nan
+# barrier 0.412   0.848   0.888   1.270   nan     nan
+# ^M2022-08-10 20: 22: 43, 577 - mmdet - INFO - Exp name: depthr_r50dcn_p4_512_1408_depth32_ddn16_w10_view_sdv_bs1.py

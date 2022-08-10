@@ -288,3 +288,28 @@ resume_from = None
 # bicycle 0.290   0.698   0.260   1.176   0.509   0.036
 # traffic_cone    0.497   0.608   0.322   nan     nan     nan
 # barrier 0.419   0.824   0.281   0.160   nan     nan
+
+# 16 gpus bs=1 in TWCC
+
+# mAP: 0.2953
+# mATE: 0.8683
+# mASE: 0.7101
+# mAOE: 1.5471
+# mAVE: 1.1387
+# mAAE: 0.2790
+# NDS: 0.2619
+# Eval time: 203.5s
+
+# Per-class results:
+# Object Class    AP      ATE     ASE     AOE     AVE     AAE
+# car     0.479   0.643   0.750   1.583   1.523   0.257
+# truck   0.234   0.938   0.796   1.588   1.359   0.307
+# bus     0.308   0.893   0.858   1.566   2.467   0.515
+# trailer 0.086   1.210   0.839   1.577   0.549   0.105
+# construction_vehicle    0.049   1.194   0.711   1.474   0.141   0.408
+# pedestrian      0.396   0.752   0.327   1.553   0.826   0.387
+# motorcycle      0.277   0.814   0.794   1.605   1.653   0.203
+# bicycle 0.268   0.758   0.809   1.680   0.592   0.050
+# traffic_cone    0.470   0.662   0.331   nan     nan     nan
+# barrier 0.386   0.820   0.886   1.298   nan     nan
+# 00: 08 < 00: 00, 1550.97it/s] ^ M ^ M2022-08-10 12: 12: 54, 803 - mmdet - INFO - Exp name: petr_r50dcn_gridmask_p4.py

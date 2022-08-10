@@ -111,12 +111,12 @@ class DepthPredictor(nn.Module):
         Returns:
             depth_logits: one hot encoding to represent the predict depth_maps,
                 in depth_gt_encoder default is None
-                `[B, N, D, H, W]`
+                `depth_map_logits: [B, N, D, H, W]`
             depth_pos_embed: depth_embedding from gt_depth_maps or predcted_depth_maps
                 for cross_depth_atten
                 `[B, N, C, H, W]`
             weighted_depth: weight-sum value of predicted_depth_maps or gt_depth_maps
-                `[B, N, H, W]`
+                `depth_map_values: [B, N, H, W]`
         """
         assert len(mlvl_feats) == self.num_levels
         # mlvl_feats (tuple[Tensor]): [B, N, C, H, W]

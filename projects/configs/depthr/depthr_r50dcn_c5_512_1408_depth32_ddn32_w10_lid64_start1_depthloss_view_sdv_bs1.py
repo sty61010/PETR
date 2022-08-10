@@ -10,6 +10,7 @@ plugin_dir = 'projects/mmdet3d_plugin/'
 # cloud range accordingly
 point_cloud_range = [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
 voxel_size = [0.2, 0.2, 8]
+
 img_norm_cfg = dict(
     mean=[103.530, 116.280, 123.675], std=[1.0, 1.0, 1.0], to_rgb=False)
 # For nuScenes we usually do 10-class detection
@@ -26,6 +27,11 @@ input_modality = dict(
 )
 embed_dims = 256
 num_levels = 1
+depth_maps_down_scale = 32
+head_in_channels = 2048
+depth_start = 1
+depth_num = 64
+position_range = [-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]
 
 model = dict(
     type='Depthr3D',
@@ -47,23 +53,45 @@ model = dict(
     pts_bbox_head=dict(
         type='DepthrHead',
         num_classes=10,
-        in_channels=2048,
+        in_channels=head_in_channels,
         num_query=900,
         LID=True,
         with_position=True,
         with_multiview=True,
-        position_range=[-61.2, -61.2, -10.0, 61.2, 61.2, 10.0],
+        depth_num=depth_num,
+        depth_start=depth_start,
+        position_range=position_range,
         normedlinear=False,
 
-        depth_gt_encoder=dict(
-            type='DepthGTEncoder',
-            num_depth_bins=80,
-            depth_min=1e-3,
-            depth_max=60.0,
+        depth_predictor=dict(
+            type='DepthPredictor',
+            num_depth_bins=depth_num,
+            depth_min=depth_start,
+            depth_max=position_range[3],
             embed_dims=embed_dims,
             num_levels=num_levels,
-            gt_depth_maps_down_scale=16,
-            depth_gt_encoder_down_scale=2,
+            in_channels=head_in_channels,
+            depth_maps_down_scale=depth_maps_down_scale,
+            encoder=dict(
+                type='DetrTransformerEncoder',
+                num_layers=1,
+                transformerlayers=dict(
+                    type='BaseTransformerLayer',
+                    attn_cfgs=[
+                        dict(
+                            type='MultiheadAttention',
+                            embed_dims=embed_dims,
+                            num_heads=8,
+                            dropout=0.1)
+                    ],
+                    feedforward_channels=256,
+                    ffn_dropout=0.1,
+                    operation_order=(
+                        'self_attn', 'norm',
+                        'ffn', 'norm',
+                    )
+                )
+            ),
         ),
 
         transformer=dict(
@@ -121,9 +149,27 @@ model = dict(
             use_sigmoid=True,
             gamma=2.0,
             alpha=0.25,
-            loss_weight=2.0),
-        loss_bbox=dict(type='L1Loss', loss_weight=0.25),
-        loss_iou=dict(type='GIoULoss', loss_weight=0.0)),
+            loss_weight=2.0,
+        ),
+        loss_bbox=dict(
+            type='L1Loss',
+            loss_weight=0.25,
+        ),
+        loss_iou=dict(
+            type='GIoULoss',
+            loss_weight=0.0,
+        ),
+        loss_ddn=dict(
+            type='DDNLoss',
+            alpha=0.25,
+            gamma=2.0,
+            fg_weight=13,
+            bg_weight=1,
+            downsample_factor=depth_maps_down_scale,
+            loss_weight=1.0,
+        ),
+        loss_depth=True,
+    ),
     # model training and testing settings
     train_cfg=dict(pts=dict(
         grid_size=[512, 512, 1],
@@ -291,7 +337,7 @@ lr_config = dict(
 )
 total_epochs = 24
 evaluation = dict(interval=1, pipeline=test_pipeline)
-find_unused_parameters = True
+find_unused_parameters = False
 
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 load_from = None

@@ -528,7 +528,7 @@ class DepthrHead(AnchorFreeHead):
         if self.depth_predictor is not None:
             # pred_depth_map_logits: [B, N, D, H, W]
             # depth_pos_embed: [B, N, C, H, W]
-            # weighted_depth: [B, N, H, W]
+            # weighted_depth(pred_depth_map_values): [B, N, H, W]
             pred_depth_map_logits, depth_pos_embed, weighted_depth = self.depth_predictor(
                 mlvl_feats=mlvl_feats,
                 mask=None,
@@ -538,7 +538,7 @@ class DepthrHead(AnchorFreeHead):
 
         if self.depth_gt_encoder is not None:
             assert gt_bboxes_3d is not None
-            # gt_depth_maps with depth_gt_encoder: [B, N, H, W, num_depth_bins], dtype: torch.float32
+            # gt_depth_maps(gt_depth_map_probs) with depth_gt_encoder: [B, N, H, W, num_depth_bins], dtype: torch.float32
             gt_depth_maps, gt_bboxes_2d = self.get_depth_map_and_gt_bboxes_2d(
                 gt_bboxes_list=gt_bboxes_3d,
                 img_metas=img_metas,
@@ -599,7 +599,9 @@ class DepthrHead(AnchorFreeHead):
             'all_bbox_preds': all_bbox_preds,
             'enc_cls_scores': None,
             'enc_bbox_preds': None,
+            # pred_depth_map_logits
             'pred_depth_map_logits': pred_depth_map_logits,
+            # pred_depth_map_values
             'weighted_depth': weighted_depth,
         }
         return outs
@@ -622,8 +624,9 @@ class DepthrHead(AnchorFreeHead):
             depth_maps_down_scale: The down scale of gt_depth_maps. Default: 8.
         Returns:
             gt_depth_maps: Thr ground truth depth maps with shape
-                [batch, num_cameras, depth_map_H, depth_map_W] if `target` is true.
-                Otherwise, the shape is [batch, num_cameras, depth_map_H, depth_map_W, num_depth_bins].
+                `gt_depth_map_indices: `[batch, num_cameras, depth_map_H, depth_map_W] if `target` is true.
+                Otherwise, 
+                `gt_depth_map_probs:` [batch, num_cameras, depth_map_H, depth_map_W, num_depth_bins].
             gt_bboxes_2d: A list of list of tensor containing 2D ground truth bboxes (x, y, w, h)
                 for each sample and each camera. Each tensor has shape [N_i, 4].
                 Below is the brief explanation of a single batch:
@@ -1009,9 +1012,20 @@ class DepthrHead(AnchorFreeHead):
         all_cls_scores = preds_dicts['all_cls_scores']
         # all_bbox_preds(torch.Tensor): [num_layer, B, num_queries, 10]
         all_bbox_preds = preds_dicts['all_bbox_preds']
+        print(f'all_bbox_preds: {all_bbox_preds.shape}')
 
         enc_cls_scores = preds_dicts['enc_cls_scores']
         enc_bbox_preds = preds_dicts['enc_bbox_preds']
+
+        # Operation for loss_depth
+        # we transform all_bbox_preds from lidar coordinate into camera coordinate to recompute
+        # depth_ave = (d + d_from_weighted_depth) / 2
+        if self.loss_depth:
+            all_bbox_preds = self.compute_d_ave(
+                img_metas=img_metas,
+                weighted_depth=preds_dicts['weighted_depth'],
+                all_bbox_preds=preds_dicts['all_bbox_preds'],
+            )
 
         # Operation from Ground True
         num_dec_layers = len(all_cls_scores)
@@ -1073,8 +1087,9 @@ class DepthrHead(AnchorFreeHead):
             # gt_depth_maps with normal depth encoder: [B, N, H, W], dtype: torch.long
             """
                 gt_depth_maps: Thr ground truth depth maps with shape
-                    [batch, num_cameras, depth_map_H, depth_map_W] if `target` is true.
-                    Otherwise, the shape is [batch, num_cameras, depth_map_H, depth_map_W, num_depth_bins].
+                    `gt_depth_map_indices: `[batch, num_cameras, depth_map_H, depth_map_W] if `target` is true.
+                    Otherwise, 
+                    `gt_depth_map_probs:` [batch, num_cameras, depth_map_H, depth_map_W, num_depth_bins].
                 gt_bboxes_2d: A list of list of tensor containing 2D ground truth bboxes(x, y, w, h)
                     for each sample and each camera. Each tensor has shape [N_i, 4].
                     Below is the brief explanation of a single batch:
@@ -1104,6 +1119,107 @@ class DepthrHead(AnchorFreeHead):
         # print(f'loss_dict: {loss_dict}')
 
         return loss_dict
+
+    def compute_d_ave(
+        self,
+        img_metas: List[Dict[str, torch.Tensor]],
+        weighted_depth: torch.Tensor,
+        all_bbox_preds: torch.Tensor,
+    ) -> torch.Tensor:
+        """Compute d_ave for loss_depth from weighted_depth and return new all_bbox_preds
+            with update cz
+
+        Args:
+            img_metas: A list of dict containing the `lidar2img` tensor.
+            weighted_depth (torch.Tensor): weight-sum value of predicted_depth_maps or gt_depth_maps
+                which reperesent the z value in camera coordinate in depth_map format:
+                `depth_maps_value(depth_map_coord): [B, N, H, W]`
+            all_bbox_preds(torch.Tensor): Sigmoid regression outputs
+                of all decode layers. Outputs from the regression head with
+                normalized coordinate format
+                (cx, cy, w, l, cz, h, rot_sine, rot_cosine, vx, vy).
+                `[num_layer, B, num_queries, 10]`
+
+        Returns:
+            all_bbox_preds_new(torch.Tensor): new all_bbox_preds
+                with update cz and normalized coordinate format
+                (cx, cy, w, l, cz, h, rot_sine, rot_cosine, vx, vy).
+                `[num_layer, B, num_queries, 10]`
+        """
+
+        # weighted_depth: [B, N, H, W] -> [B*N, C, H, W]
+        weighted_depth = weighted_depth.flatten(0, 1).unsqueeze(1)
+        # lidar2img: [B, num_cameras, 4, 4]
+        lidar2img = all_bbox_preds.new_tensor([img_meta['lidar2img'] for img_meta in img_metas])
+        print(f'lidar2img: {lidar2img.shape}')
+
+        # outputs_centers: [num_layer, B, num_query, 3] -> [B, num_query, num_layer, 3]
+        outputs_centers = torch.cat(
+            (all_bbox_preds[..., 0:2], all_bbox_preds[..., 4:5]), dim=-1).permute(1, 2, 0, 3)
+
+        # convert to homogeneous coordinate. [batch, num_query, num_layer, 4]
+        outputs_centers = torch.cat([
+            outputs_centers,
+            outputs_centers.new_ones((*outputs_centers.shape[:-1], 1))
+        ], dim=-1)
+        # print(f'outputs_centers: {outputs_centers.shape}')
+
+        # uvd: [num_cameras, batch, num_query, num_layer, 3]
+        uvd: torch.Tensor = torch.einsum('bnij,bqlj->nbqli', lidar2img[:, :, :3], outputs_centers)
+        N, B, Q, L, _ = uvd.shape
+
+        # uv: [num_cameras, batch, num_query, num_layer, 2]
+        uv = uvd[..., :2] / (uvd[..., -1:] + 1e-8)
+        img_H, img_W, _ = img_metas[0]['img_shape'][0]
+
+        # normalize to [0, 1] -> [-1, 1]
+        uv = (uv / uv.new_tensor([img_W, img_H]).reshape(1, 1, 1, 1, 2)) * 2 - 1
+
+        # uv:[N, B, Q, L, 2] -> [B*N, Q, L, 2]
+        uv = uv.flatten(0, 1).detach()
+        # print(f'uv: {uv.shape}')
+        # d_from_weighted_depth: [num_cameras*batch, num_query, num_layer, 1]
+        d_from_weighted_depth = F.grid_sample(
+            weighted_depth,
+            uv,
+            mode='bilinear',
+            align_corners=True,
+        )
+        # d_from_weighted_depth: [num_cameras, batch, num_query, num_layer, 1]
+        d_from_weighted_depth = d_from_weighted_depth.reshape(N, B, Q, L, -1)
+
+        # d: [num_cameras, batch, num_query, num_layer, 1]
+        d = uvd[..., 2:]
+
+        # d_ave: [num_cameras, batch, num_query, num_layer, 1]
+        d_ave = (d + d_from_weighted_depth) / 2
+        print(f'd_ave: {d_ave.shape}')
+
+        # uvd_new: [num_cameras, batch, num_query, num_layer, 3]
+        uvd_new = torch.cat((uvd[..., :2], d_ave), dim=-1)
+
+        # convert to homogeneous coordinate.
+        # uvd_new: [num_cameras, batch, num_query, num_layer, 4]
+        uvd_new = torch.cat([
+            uvd_new,
+            uvd_new.new_ones((*uvd_new.shape[:-1], 1))
+        ], dim=-1)
+        print(f'uvd_new: {uvd_new.shape}')
+
+        # img2lidar: [B, num_cameras, 4, 4]
+        img2lidar = torch.linalg.inv(lidar2img)
+        print(f'img2lidar: {img2lidar.shape}')
+
+        # TODO: Please check the transformation from img2lidar for new centers
+        # and aggregate center from different camera in lidar-coordinate
+        outputs_centers_new = torch.einsum('bnij,nbqlj->bqli', img2lidar[:, :, :3], uvd_new)
+        print(f'outputs_centers_new: {outputs_centers_new.shape}')
+
+        all_bbox_preds_new = all_bbox_preds
+        all_bbox_preds_new[..., :2] = outputs_centers_new[..., :2]
+        all_bbox_preds_new[..., 4:5] = outputs_centers_new[..., :-1]
+
+        return all_bbox_preds_new
 
     @force_fp32(apply_to=('preds_dicts'))
     def get_bboxes(self, preds_dicts, img_metas, rescale=False):

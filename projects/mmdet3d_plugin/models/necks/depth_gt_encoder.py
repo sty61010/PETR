@@ -50,14 +50,6 @@ class DepthGTEncoder(nn.Module):
 
         # Create modules
         d_model = embed_dims
-        # self.depth_head = nn.Sequential(
-        #     # nn.Conv2d(d_model, d_model, kernel_size=(3, 3), padding=1),
-        #     nn.Conv2d(1 + depth_num_bins, d_model, kernel_size=(3, 3), padding=1),
-        #     nn.GroupNorm(32, num_channels=d_model),
-        #     nn.ReLU(),
-        #     nn.Conv2d(d_model, d_model, kernel_size=(3, 3), padding=1),
-        #     nn.GroupNorm(32, num_channels=d_model),
-        #     nn.ReLU())
 
         """
         default down scale of gt_depth_maps: 8
@@ -99,17 +91,17 @@ class DepthGTEncoder(nn.Module):
             pos (Optional[List[torch.Tensor]]): position embedding for input feature images
                 `Optional[List[torch.Tensor]]: [B, N, C, H, W]`
             gt_depth_maps (torch.Tensor): gt_depth_map with default down sample scale=8.
-                `[B, N, H, W]`
+                `gt_depth_map_probs:` [batch, num_cameras, depth_map_H, depth_map_W, num_depth_bins].
 
         Returns:
             depth_logits: one hot encoding to represent the predict depth_maps,
                 in depth_gt_encoder default is None
-                `[B, N, D, H, W]`
+                `depth_map_logits: [B, N, D, H, W]`
             depth_pos_embed: depth_embedding from gt_depth_maps or predcted_depth_maps
                 for cross_depth_atten
                 `[B, N, C, H, W]`
             weighted_depth: weight-sum value of predicted_depth_maps or gt_depth_maps
-                `[B, N, H, W]`
+                `depth_maps_values: [B, N, H, W]`
         """
         depth_logits = None
 
