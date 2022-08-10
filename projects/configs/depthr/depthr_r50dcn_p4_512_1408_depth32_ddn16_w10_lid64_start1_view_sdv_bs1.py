@@ -31,6 +31,7 @@ depth_maps_down_scale = 16
 head_in_channels = 256
 depth_start = 1
 depth_num = 64
+position_range = [-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]
 
 model = dict(
     type='Depthr3D',
@@ -65,14 +66,14 @@ model = dict(
         with_multiview=True,
         depth_num=depth_num,
         depth_start=depth_start,
-        position_range=[-61.2, -61.2, -10.0, 61.2, 61.2, 10.0],
+        position_range=position_range,
         normedlinear=False,
 
         depth_predictor=dict(
             type='DepthPredictor',
-            num_depth_bins=80,
-            depth_min=1e-3,
-            depth_max=60.0,
+            num_depth_bins=depth_num,
+            depth_min=depth_start,
+            depth_max=position_range[3],
             embed_dims=embed_dims,
             num_levels=num_levels,
             in_channels=head_in_channels,

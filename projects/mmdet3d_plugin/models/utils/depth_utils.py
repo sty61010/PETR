@@ -24,9 +24,14 @@ def bin_depths(depth_map, mode="LID", depth_min=1e-3, depth_max=60, num_depth_bi
     if mode == "UD":
         bin_size = (depth_max - depth_min) / num_depth_bins
         indices = (depth_map - depth_min) / bin_size
+
     elif mode == "LID":
         bin_size = 2 * (depth_max - depth_min) / (num_depth_bins * (1 + num_depth_bins))
         indices = -0.5 + 0.5 * torch.sqrt(1 + 8 * (depth_map - depth_min) / bin_size)
+
+        # bin_size = (depth_max - depth_min) / (num_depth_bins * (1 + num_depth_bins))
+        # indices = -0.5 + 0.5 * torch.sqrt(1 + 4 * (depth_map - depth_min) / bin_size)
+
     elif mode == "SID":
         indices = num_depth_bins * (torch.log(1 + depth_map) - math.log(1 + depth_min)) / \
             (math.log(1 + depth_max) - math.log(1 + depth_min))
@@ -37,6 +42,13 @@ def bin_depths(depth_map, mode="LID", depth_min=1e-3, depth_max=60, num_depth_bi
     mask = (indices < 0) | (indices > num_depth_bins) | (~torch.isfinite(indices))
     indices[mask] = num_depth_bins
     indices = indices.long()
+
+    # print(f'depth_max: {depth_max}')
+    # print(f'depth_min: {depth_min}')
+
+    # print(f'bin_size: {bin_size}')
+    # print(f'indices: {indices}')
+
     if target:
         return indices
     # [*, H, W, num_depth_bins + 1]

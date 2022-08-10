@@ -377,6 +377,13 @@ class DepthrHead(AnchorFreeHead):
             index_1 = index + 1
             bin_size = (self.position_range[3] - self.depth_start) / (self.depth_num * (1 + self.depth_num))
             coords_d = self.depth_start + bin_size * index * index_1
+
+            # print(f'self.position_range[3]: {self.position_range[3]}')
+            # print(f'self.depth_start: {self.depth_start}')
+
+            # print(f'bin_size: {bin_size}')
+            # print(f'coords_d: {coords_d}')
+
         else:
             index = torch.arange(start=0, end=self.depth_num, step=1, device=img_feats[0].device).float()
             bin_size = (self.position_range[3] - self.depth_start) / self.depth_num
