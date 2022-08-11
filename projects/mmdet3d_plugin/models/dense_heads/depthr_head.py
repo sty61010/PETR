@@ -1012,7 +1012,7 @@ class DepthrHead(AnchorFreeHead):
         all_cls_scores = preds_dicts['all_cls_scores']
         # all_bbox_preds(torch.Tensor): [num_layer, B, num_queries, 10]
         all_bbox_preds = preds_dicts['all_bbox_preds']
-        print(f'all_bbox_preds: {all_bbox_preds.shape}')
+        # print(f'all_bbox_preds: {all_bbox_preds.shape}')
 
         enc_cls_scores = preds_dicts['enc_cls_scores']
         enc_bbox_preds = preds_dicts['enc_bbox_preds']

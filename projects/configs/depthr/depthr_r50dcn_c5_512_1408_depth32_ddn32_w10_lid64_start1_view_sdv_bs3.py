@@ -10,6 +10,7 @@ plugin_dir = 'projects/mmdet3d_plugin/'
 # cloud range accordingly
 point_cloud_range = [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
 voxel_size = [0.2, 0.2, 8]
+
 img_norm_cfg = dict(
     mean=[103.530, 116.280, 123.675], std=[1.0, 1.0, 1.0], to_rgb=False)
 # For nuScenes we usually do 10-class detection
@@ -26,6 +27,11 @@ input_modality = dict(
 )
 embed_dims = 256
 num_levels = 1
+depth_maps_down_scale = 32
+head_in_channels = 2048
+depth_start = 1
+depth_num = 64
+position_range = [-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]
 
 model = dict(
     type='Depthr3D',
@@ -47,23 +53,45 @@ model = dict(
     pts_bbox_head=dict(
         type='DepthrHead',
         num_classes=10,
-        in_channels=2048,
+        in_channels=head_in_channels,
         num_query=900,
         LID=True,
         with_position=True,
         with_multiview=True,
-        position_range=[-61.2, -61.2, -10.0, 61.2, 61.2, 10.0],
+        depth_num=depth_num,
+        depth_start=depth_start,
+        position_range=position_range,
         normedlinear=False,
 
-        depth_gt_encoder=dict(
-            type='DepthGTEncoder',
-            num_depth_bins=80,
-            depth_min=1e-3,
-            depth_max=60.0,
+        depth_predictor=dict(
+            type='DepthPredictor',
+            num_depth_bins=depth_num,
+            depth_min=depth_start,
+            depth_max=position_range[3],
             embed_dims=embed_dims,
             num_levels=num_levels,
-            gt_depth_maps_down_scale=16,
-            depth_gt_encoder_down_scale=2,
+            in_channels=head_in_channels,
+            depth_maps_down_scale=depth_maps_down_scale,
+            encoder=dict(
+                type='DetrTransformerEncoder',
+                num_layers=1,
+                transformerlayers=dict(
+                    type='BaseTransformerLayer',
+                    attn_cfgs=[
+                        dict(
+                            type='MultiheadAttention',
+                            embed_dims=embed_dims,
+                            num_heads=8,
+                            dropout=0.1)
+                    ],
+                    feedforward_channels=256,
+                    ffn_dropout=0.1,
+                    operation_order=(
+                        'self_attn', 'norm',
+                        'ffn', 'norm',
+                    )
+                )
+            ),
         ),
 
         transformer=dict(
@@ -121,9 +149,26 @@ model = dict(
             use_sigmoid=True,
             gamma=2.0,
             alpha=0.25,
-            loss_weight=2.0),
-        loss_bbox=dict(type='L1Loss', loss_weight=0.25),
-        loss_iou=dict(type='GIoULoss', loss_weight=0.0)),
+            loss_weight=2.0,
+        ),
+        loss_bbox=dict(
+            type='L1Loss',
+            loss_weight=0.25,
+        ),
+        loss_iou=dict(
+            type='GIoULoss',
+            loss_weight=0.0,
+        ),
+        loss_ddn=dict(
+            type='DDNLoss',
+            alpha=0.25,
+            gamma=2.0,
+            fg_weight=13,
+            bg_weight=1,
+            downsample_factor=depth_maps_down_scale,
+            loss_weight=1.0,
+        ),
+    ),
     # model training and testing settings
     train_cfg=dict(pts=dict(
         grid_size=[512, 512, 1],
@@ -239,7 +284,7 @@ test_pipeline = [
 
 data_length = 60000
 data = dict(
-    samples_per_gpu=1,
+    samples_per_gpu=3,
     workers_per_gpu=4,
     train=dict(
         type=dataset_type,
@@ -298,50 +343,3 @@ load_from = None
 resume_from = None
 
 # 5 gpus bs=1
-# mAP: 0.3428
-# mATE: 0.8157
-# mASE: 0.2787
-# mAOE: 0.6615
-# mAVE: 1.0527
-# mAAE: 0.2429
-# NDS: 0.3715
-# Eval time: 257.9s
-
-# Per-class results:
-# Object Class    AP      ATE     ASE     AOE     AVE     AAE
-# car     0.519   0.605   0.155   0.125   1.179   0.248
-# truck   0.283   0.867   0.239   0.243   0.969   0.241
-# bus     0.373   0.857   0.215   0.216   2.564   0.443
-# trailer 0.117   1.108   0.249   0.743   0.510   0.054
-# construction_vehicle    0.079   1.108   0.497   1.266   0.121   0.372
-# pedestrian      0.429   0.730   0.297   1.116   0.831   0.359
-# motorcycle      0.329   0.780   0.265   0.898   1.774   0.197
-# bicycle 0.321   0.700   0.263   1.167   0.471   0.029
-# traffic_cone    0.523   0.593   0.328   nan     nan     nan
-# barrier 0.455   0.809   0.279   0.181   nan     nan
-# 2022-08-07 19:16:56,985 - mmdet - INFO - Exp name: depthr_r50dcn_c5_512_1408_gtdepth_16_view_sdv_bs_1.py
-
-# without view
-# 5 gpus bs=1
-# mAP: 0.3400
-# mATE: 0.5882
-# mASE: 0.2873
-# mAOE: 1.0331
-# mAVE: 1.1708
-# mAAE: 0.4044
-# NDS: 0.3420
-# Eval time: 248.9s
-
-# Per-class results:
-# Object Class    AP      ATE     ASE     AOE     AVE     AAE
-# car     0.632   0.442   0.150   0.698   2.063   0.482
-# truck   0.233   0.620   0.243   1.032   1.288   0.397
-# bus     0.262   0.644   0.242   0.827   2.545   0.724
-# trailer 0.179   0.894   0.280   0.944   0.523   0.197
-# construction_vehicle    0.165   0.638   0.442   1.438   0.152   0.371
-# pedestrian      0.576   0.476   0.285   1.454   0.926   0.655
-# motorcycle      0.079   0.526   0.320   1.308   1.646   0.380
-# bicycle 0.193   0.451   0.299   1.354   0.224   0.029
-# traffic_cone    0.515   0.539   0.323   nan     nan     nan
-# barrier 0.566   0.652   0.288   0.245   nan     nan
-# 2022-08-11 14: 57: 24, 422 - mmdet - INFO - Exp name: depthr_r50dcn_c5_512_1408_depth32_gt16_sdv_bs1.py
