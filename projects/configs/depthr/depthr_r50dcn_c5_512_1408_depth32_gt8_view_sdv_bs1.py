@@ -299,3 +299,6 @@ resume_from = None
 
 # 5 gpus bs=1
 # mAP: 0.3397
+
+# 5 gpus bs=2
+# mAP: 0.3459
