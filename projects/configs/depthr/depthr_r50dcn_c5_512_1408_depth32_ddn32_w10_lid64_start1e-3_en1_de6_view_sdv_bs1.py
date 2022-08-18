@@ -28,8 +28,9 @@ input_modality = dict(
 embed_dims = 256
 num_levels = 1
 depth_maps_down_scale = 32
+depth_emb_down_scale = 32
 head_in_channels = 2048
-depth_start = 1
+depth_start = 1e-3
 depth_num = 64
 position_range = [-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]
 
@@ -60,6 +61,7 @@ model = dict(
         with_multiview=True,
         depth_num=depth_num,
         depth_start=depth_start,
+        embed_dims=embed_dims,
         position_range=position_range,
         normedlinear=False,
 
@@ -70,8 +72,9 @@ model = dict(
             depth_max=position_range[3],
             embed_dims=embed_dims,
             num_levels=num_levels,
-            in_channels=head_in_channels,
+            in_channels=embed_dims,
             depth_maps_down_scale=depth_maps_down_scale,
+            depth_emb_down_scale=depth_emb_down_scale,
             encoder=dict(
                 type='DetrTransformerEncoder',
                 num_layers=1,
@@ -93,7 +96,7 @@ model = dict(
                 )
             ),
         ),
-
+        only_cross_depth_attn=False,
         transformer=dict(
             type='DepthrTransformer',
             decoder=dict(
@@ -101,7 +104,6 @@ model = dict(
                 return_intermediate=True,
                 num_layers=6,
                 transformerlayers=dict(
-                    # type='DepthrTransformerDecoderLayer',
                     type='MultiAttentionDecoderLayer',
 
                     attn_cfgs=[
@@ -342,26 +344,26 @@ runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 load_from = None
 resume_from = None
 
-# 3 gpus bs=3
-# mAP: 0.2914
-# mATE: 0.8540
-# mASE: 0.2876
-# mAOE: 0.6450
-# mAVE: 0.9217
-# mAAE: 0.2314
-# NDS: 0.3517
-# Eval time: 240.9s
+# 3 gpus bs=2
+# mAP: 0.2930
+# mATE: 0.8461
+# mASE: 0.2816
+# mAOE: 0.6661
+# mAVE: 1.0677
+# mAAE: 0.2571
+# NDS: 0.3414
+# Eval time: 126.3s
 
 # Per-class results:
 # Object Class    AP      ATE     ASE     AOE     AVE     AAE
-# car     0.488   0.620   0.157   0.133   1.136   0.243
-# truck   0.242   0.865   0.238   0.266   0.921   0.245
-# bus     0.295   0.949   0.235   0.199   2.174   0.416
-# trailer 0.078   1.182   0.264   0.606   0.356   0.056
-# construction_vehicle    0.036   1.160   0.520   1.270   0.130   0.405
-# pedestrian      0.386   0.752   0.299   1.118   0.817   0.319
-# motorcycle      0.265   0.806   0.270   0.902   1.384   0.148
-# bicycle 0.239   0.730   0.275   1.147   0.456   0.020
-# traffic_cone    0.479   0.658   0.333   nan     nan     nan
-# barrier 0.406   0.815   0.285   0.165   nan     nan
-# 2022-08-13 06:52:20,450 - mmdet - INFO - Exp name: depthr_r50dcn_c5_512_1408_depth32_ddn32_w10_lid64_start1_view_sdv_bs3.py
+# car     0.490   0.618   0.157   0.140   1.233   0.236
+# truck   0.237   0.880   0.242   0.259   1.135   0.263
+# bus     0.292   0.911   0.218   0.171   2.501   0.497
+# trailer 0.081   1.158   0.259   0.597   0.504   0.072
+# construction_vehicle    0.047   1.104   0.502   1.329   0.139   0.348
+# pedestrian      0.390   0.753   0.303   1.120   0.842   0.400
+# motorcycle      0.275   0.808   0.252   0.975   1.566   0.185
+# bicycle 0.231   0.763   0.279   1.245   0.622   0.056
+# traffic_cone    0.500   0.631   0.321   nan     nan     nan
+# barrier 0.387   0.836   0.285   0.159   nan     nan
+# 2022-08-14 06: 03: 03, 628 - mmdet - INFO - Exp name: depthr_r50dcn_c5_512_1408_depth32_ddn32_w10_lid64_start001_view_sdv_bs2.py

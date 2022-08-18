@@ -28,9 +28,9 @@ input_modality = dict(
 embed_dims = 256
 num_levels = 2
 depth_maps_down_scale = 16
-depth_emb_down_scale = 16
+depth_emb_down_scale = 32
 head_in_channels = 256
-depth_start = 1
+depth_start = 1e-3
 depth_num = 64
 position_range = [-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]
 
@@ -78,12 +78,12 @@ model = dict(
             depth_max=position_range[3],
             embed_dims=embed_dims,
             num_levels=num_levels,
-            in_channels=head_in_channels,
+            in_channels=embed_dims,
             depth_maps_down_scale=depth_maps_down_scale,
             depth_emb_down_scale=depth_emb_down_scale,
             encoder=dict(
                 type='DetrTransformerEncoder',
-                num_layers=1,
+                num_layers=3,
                 transformerlayers=dict(
                     type='BaseTransformerLayer',
                     attn_cfgs=[
@@ -102,8 +102,7 @@ model = dict(
                 )
             ),
         ),
-        only_cross_depth_attn=True,
-
+        only_cross_depth_attn=False,
         transformer=dict(
             type='DepthrTransformer',
             decoder=dict(
@@ -111,7 +110,6 @@ model = dict(
                 return_intermediate=True,
                 num_layers=6,
                 transformerlayers=dict(
-                    # type='DepthrTransformerDecoderLayer',
                     type='MultiAttentionDecoderLayer',
 
                     attn_cfgs=[
@@ -121,11 +119,11 @@ model = dict(
                             num_heads=8,
                             dropout=0.1),
 
-                        # dict(
-                        #     type='MultiheadAttention',
-                        #     embed_dims=256,
-                        #     num_heads=8,
-                        #     dropout=0.1),
+                        dict(
+                            type='MultiheadAttention',
+                            embed_dims=256,
+                            num_heads=8,
+                            dropout=0.1),
 
                         dict(
                             type='PETRMultiheadAttention',
@@ -137,8 +135,8 @@ model = dict(
                     ffn_dropout=0.1,
                     with_cp=True,
                     operation_order=(
+                        'cross_depth_attn', 'norm',
                         'self_attn', 'norm',
-                        # 'cross_depth_attn', 'norm',
                         'cross_view_attn', 'norm',
                         'ffn', 'norm',
                     )
@@ -351,5 +349,5 @@ find_unused_parameters = False
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 load_from = None
 resume_from = None
-
+# model_size: 18G
 # 8 gpus bs=1 in TWCC

@@ -26,9 +26,10 @@ input_modality = dict(
     use_external=False,
 )
 embed_dims = 256
-num_levels = 1
-depth_maps_down_scale = 32
-head_in_channels = 2048
+num_levels = 2
+depth_maps_down_scale = 16
+depth_emb_down_scale = 32
+head_in_channels = 256
 depth_start = 1e-3
 depth_num = 64
 position_range = [-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]
@@ -40,7 +41,7 @@ model = dict(
         type='ResNet',
         depth=50,
         num_stages=4,
-        out_indices=(3,),
+        out_indices=(2, 3,),
         frozen_stages=-1,
         norm_cfg=dict(type='BN2d', requires_grad=False),
         norm_eval=True,
@@ -49,6 +50,12 @@ model = dict(
         dcn=dict(type='DCNv2', deform_groups=1, fallback_on_stride=False),
         stage_with_dcn=(False, False, True, True),
         pretrained='ckpts/resnet50_msra-5891d200.pth',
+    ),
+    img_neck=dict(
+        type='CPFPN',
+        in_channels=[1024, 2048],
+        out_channels=head_in_channels,
+        num_outs=2,
     ),
     pts_bbox_head=dict(
         type='DepthrHead',
@@ -60,6 +67,7 @@ model = dict(
         with_multiview=True,
         depth_num=depth_num,
         depth_start=depth_start,
+        embed_dims=embed_dims,
         position_range=position_range,
         normedlinear=False,
 
@@ -70,8 +78,9 @@ model = dict(
             depth_max=position_range[3],
             embed_dims=embed_dims,
             num_levels=num_levels,
-            in_channels=head_in_channels,
+            in_channels=embed_dims,
             depth_maps_down_scale=depth_maps_down_scale,
+            depth_emb_down_scale=depth_emb_down_scale,
             encoder=dict(
                 type='DetrTransformerEncoder',
                 num_layers=1,
@@ -93,7 +102,7 @@ model = dict(
                 )
             ),
         ),
-
+        only_cross_depth_attn=False,
         transformer=dict(
             type='DepthrTransformer',
             decoder=dict(
@@ -101,7 +110,6 @@ model = dict(
                 return_intermediate=True,
                 num_layers=6,
                 transformerlayers=dict(
-                    # type='DepthrTransformerDecoderLayer',
                     type='MultiAttentionDecoderLayer',
 
                     attn_cfgs=[
@@ -127,8 +135,8 @@ model = dict(
                     ffn_dropout=0.1,
                     with_cp=True,
                     operation_order=(
-                        'self_attn', 'norm',
                         'cross_depth_attn', 'norm',
+                        'self_attn', 'norm',
                         'cross_view_attn', 'norm',
                         'ffn', 'norm',
                     )
@@ -341,27 +349,5 @@ find_unused_parameters = False
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 load_from = None
 resume_from = None
-
-# 3 gpus bs=2
-# mAP: 0.2930
-# mATE: 0.8461
-# mASE: 0.2816
-# mAOE: 0.6661
-# mAVE: 1.0677
-# mAAE: 0.2571
-# NDS: 0.3414
-# Eval time: 126.3s
-
-# Per-class results:
-# Object Class    AP      ATE     ASE     AOE     AVE     AAE
-# car     0.490   0.618   0.157   0.140   1.233   0.236
-# truck   0.237   0.880   0.242   0.259   1.135   0.263
-# bus     0.292   0.911   0.218   0.171   2.501   0.497
-# trailer 0.081   1.158   0.259   0.597   0.504   0.072
-# construction_vehicle    0.047   1.104   0.502   1.329   0.139   0.348
-# pedestrian      0.390   0.753   0.303   1.120   0.842   0.400
-# motorcycle      0.275   0.808   0.252   0.975   1.566   0.185
-# bicycle 0.231   0.763   0.279   1.245   0.622   0.056
-# traffic_cone    0.500   0.631   0.321   nan     nan     nan
-# barrier 0.387   0.836   0.285   0.159   nan     nan
-# 2022-08-14 06: 03: 03, 628 - mmdet - INFO - Exp name: depthr_r50dcn_c5_512_1408_depth32_ddn32_w10_lid64_start001_view_sdv_bs2.py
+# model_size: 18G
+# 8 gpus bs=1 in TWCC

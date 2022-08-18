@@ -97,6 +97,7 @@ class DepthrTransformer(BaseModule):
                 - memory: Output results from encoder, with shape \
                       [bs, embed_dims, h, w].
         """
+        # print(f'x: {x.shape}')
         bs, n, c, h, w = x.shape
         # memory: [bs, n, c, h, w] -> [n*h*w, bs, c]
         memory = x.permute(1, 3, 4, 0, 2).reshape(-1, bs, c)

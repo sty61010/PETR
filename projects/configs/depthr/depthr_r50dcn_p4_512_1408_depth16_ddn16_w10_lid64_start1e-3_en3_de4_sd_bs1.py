@@ -26,10 +26,11 @@ input_modality = dict(
     use_external=False,
 )
 embed_dims = 256
-num_levels = 1
-depth_maps_down_scale = 32
-head_in_channels = 2048
-depth_start = 1e-2
+num_levels = 2
+depth_maps_down_scale = 16
+depth_emb_down_scale = 16
+head_in_channels = 256
+depth_start = 1e-3
 depth_num = 64
 position_range = [-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]
 
@@ -40,7 +41,7 @@ model = dict(
         type='ResNet',
         depth=50,
         num_stages=4,
-        out_indices=(3,),
+        out_indices=(2, 3,),
         frozen_stages=-1,
         norm_cfg=dict(type='BN2d', requires_grad=False),
         norm_eval=True,
@@ -49,6 +50,12 @@ model = dict(
         dcn=dict(type='DCNv2', deform_groups=1, fallback_on_stride=False),
         stage_with_dcn=(False, False, True, True),
         pretrained='ckpts/resnet50_msra-5891d200.pth',
+    ),
+    img_neck=dict(
+        type='CPFPN',
+        in_channels=[1024, 2048],
+        out_channels=head_in_channels,
+        num_outs=2,
     ),
     pts_bbox_head=dict(
         type='DepthrHead',
@@ -60,6 +67,7 @@ model = dict(
         with_multiview=True,
         depth_num=depth_num,
         depth_start=depth_start,
+        embed_dims=embed_dims,
         position_range=position_range,
         normedlinear=False,
 
@@ -70,11 +78,12 @@ model = dict(
             depth_max=position_range[3],
             embed_dims=embed_dims,
             num_levels=num_levels,
-            in_channels=head_in_channels,
+            in_channels=embed_dims,
             depth_maps_down_scale=depth_maps_down_scale,
+            depth_emb_down_scale=depth_emb_down_scale,
             encoder=dict(
                 type='DetrTransformerEncoder',
-                num_layers=1,
+                num_layers=3,
                 transformerlayers=dict(
                     type='BaseTransformerLayer',
                     attn_cfgs=[
@@ -93,15 +102,14 @@ model = dict(
                 )
             ),
         ),
-
+        only_cross_depth_attn=True,
         transformer=dict(
             type='DepthrTransformer',
             decoder=dict(
                 type='DepthrTransformerDecoder',
                 return_intermediate=True,
-                num_layers=6,
+                num_layers=4,
                 transformerlayers=dict(
-                    # type='DepthrTransformerDecoderLayer',
                     type='MultiAttentionDecoderLayer',
 
                     attn_cfgs=[
@@ -111,11 +119,11 @@ model = dict(
                             num_heads=8,
                             dropout=0.1),
 
-                        dict(
-                            type='MultiheadAttention',
-                            embed_dims=256,
-                            num_heads=8,
-                            dropout=0.1),
+                        # dict(
+                        #     type='MultiheadAttention',
+                        #     embed_dims=256,
+                        #     num_heads=8,
+                        #     dropout=0.1),
 
                         dict(
                             type='PETRMultiheadAttention',
@@ -128,7 +136,7 @@ model = dict(
                     with_cp=True,
                     operation_order=(
                         'self_attn', 'norm',
-                        'cross_depth_attn', 'norm',
+                        # 'cross_depth_attn', 'norm',
                         'cross_view_attn', 'norm',
                         'ffn', 'norm',
                     )
@@ -342,26 +350,5 @@ runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 load_from = None
 resume_from = None
 
-# 8 gpus bs=1
-# mAP: 0.2836
-# mATE: 0.8583
-# mASE: 0.2825
-# mAOE: 0.6707
-# mAVE: 1.1050
-# mAAE: 0.2704
-# NDS: 0.3336
-# Eval time: 216.2s
-
-# Per-class results:
-# Object Class    AP      ATE     ASE     AOE     AVE     AAE
-# car     0.472   0.632   0.155   0.145   1.461   0.300
-# truck   0.217   0.934   0.237   0.283   1.389   0.334
-# bus     0.287   0.946   0.213   0.169   2.299   0.522
-# trailer 0.074   1.182   0.263   0.649   0.478   0.073
-# construction_vehicle    0.040   1.150   0.507   1.154   0.119   0.364
-# pedestrian      0.374   0.766   0.302   1.168   0.856   0.364
-# motorcycle      0.275   0.752   0.264   1.036   1.589   0.167
-# bicycle 0.238   0.739   0.271   1.261   0.649   0.040
-# traffic_cone    0.474   0.634   0.328   nan     nan     nan
-# barrier 0.385   0.849   0.284   0.171   nan     nan
-# 2022-08-13 22:16:36,960 - mmdet - INFO - Exp name: depthr_r50dcn_c5_512_1408_depth32_ddn32_w10_lid64_start01_view_sdv_bs1.py
+# model_size: 29G
+# 8 gpus bs=1 in TWCC

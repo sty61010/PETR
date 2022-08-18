@@ -26,10 +26,11 @@ input_modality = dict(
     use_external=False,
 )
 embed_dims = 256
-num_levels = 1
-depth_maps_down_scale = 32
-head_in_channels = 2048
-depth_start = 1
+num_levels = 2
+depth_maps_down_scale = 16
+depth_emb_down_scale = 16
+head_in_channels = 256
+depth_start = 1e-3
 depth_num = 64
 position_range = [-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]
 
@@ -40,7 +41,7 @@ model = dict(
         type='ResNet',
         depth=50,
         num_stages=4,
-        out_indices=(3,),
+        out_indices=(2, 3,),
         frozen_stages=-1,
         norm_cfg=dict(type='BN2d', requires_grad=False),
         norm_eval=True,
@@ -49,6 +50,12 @@ model = dict(
         dcn=dict(type='DCNv2', deform_groups=1, fallback_on_stride=False),
         stage_with_dcn=(False, False, True, True),
         pretrained='ckpts/resnet50_msra-5891d200.pth',
+    ),
+    img_neck=dict(
+        type='CPFPN',
+        in_channels=[1024, 2048],
+        out_channels=head_in_channels,
+        num_outs=2,
     ),
     pts_bbox_head=dict(
         type='DepthrHead',
@@ -60,6 +67,7 @@ model = dict(
         with_multiview=True,
         depth_num=depth_num,
         depth_start=depth_start,
+        embed_dims=embed_dims,
         position_range=position_range,
         normedlinear=False,
 
@@ -70,8 +78,9 @@ model = dict(
             depth_max=position_range[3],
             embed_dims=embed_dims,
             num_levels=num_levels,
-            in_channels=head_in_channels,
+            in_channels=embed_dims,
             depth_maps_down_scale=depth_maps_down_scale,
+            depth_emb_down_scale=depth_emb_down_scale,
             encoder=dict(
                 type='DetrTransformerEncoder',
                 num_layers=1,
@@ -93,7 +102,7 @@ model = dict(
                 )
             ),
         ),
-
+        only_cross_depth_attn=False,
         transformer=dict(
             type='DepthrTransformer',
             decoder=dict(
@@ -101,7 +110,6 @@ model = dict(
                 return_intermediate=True,
                 num_layers=6,
                 transformerlayers=dict(
-                    # type='DepthrTransformerDecoderLayer',
                     type='MultiAttentionDecoderLayer',
 
                     attn_cfgs=[
@@ -341,7 +349,5 @@ find_unused_parameters = False
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 load_from = None
 resume_from = None
-
-# 5 gpus bs=1
-# 3 gpus bs=3
-# mAP: 0.2938
+# model_size: 32G
+# 8 gpus bs=1 in TWCC
