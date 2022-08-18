@@ -142,11 +142,13 @@ class DepthrHead(AnchorFreeHead):
                  depth_num=64,
                  LID=False,
                  depth_start=1,
+                 embed_dims=256,
                  position_range=[-65, -65, -8.0, 65, 65, 8.0],
                  init_cfg=None,
                  normedlinear=False,
                  depth_predictor=None,
                  depth_gt_encoder=None,
+                 only_cross_depth_attn=False,
                  loss_ddn=None,
                  loss_depth=False,
                  **kwargs):
@@ -209,7 +211,7 @@ class DepthrHead(AnchorFreeHead):
         self.test_cfg = test_cfg
         self.fp16_enabled = False
 
-        self.embed_dims = 256
+        self.embed_dims = embed_dims
         self.depth_step = depth_step
         self.depth_num = depth_num
         self.position_dim = 3 * self.depth_num
@@ -293,7 +295,7 @@ class DepthrHead(AnchorFreeHead):
             self.depth_maps_down_scale = loss_ddn.get("downsample_factor")
 
         self.loss_depth = loss_depth
-
+        self.only_cross_depth_attn = only_cross_depth_attn
         self._init_layers()
 
     def _init_layers(self):
@@ -310,10 +312,12 @@ class DepthrHead(AnchorFreeHead):
             cls_branch.append(Linear(self.embed_dims, self.embed_dims))
             cls_branch.append(nn.LayerNorm(self.embed_dims))
             cls_branch.append(nn.ReLU(inplace=True))
+
         if self.normedlinear:
             cls_branch.append(NormedLinear(self.embed_dims, self.cls_out_channels))
         else:
             cls_branch.append(Linear(self.embed_dims, self.cls_out_channels))
+
         fc_cls = nn.Sequential(*cls_branch)
 
         reg_branch = []
@@ -484,9 +488,12 @@ class DepthrHead(AnchorFreeHead):
         for img_id in range(batch_size):
             for cam_id in range(num_cams):
                 img_h, img_w, _ = img_metas[img_id]['img_shape'][cam_id]
+                # print(f'img_h: {img_h}, img_w: {img_w}')
                 masks[img_id, cam_id, :img_h, :img_w] = 0
+
         x = self.input_proj(x.flatten(0, 1))
         x = x.view(batch_size, num_cams, *x.shape[-3:])
+
         # interpolate masks to have the same spatial shape with x
         masks = F.interpolate(
             masks, size=x.shape[-2:]).to(torch.bool)
@@ -530,7 +537,7 @@ class DepthrHead(AnchorFreeHead):
             # depth_pos_embed: [B, N, C, H, W]
             # weighted_depth(pred_depth_map_values): [B, N, H, W]
             pred_depth_map_logits, depth_pos_embed, weighted_depth = self.depth_predictor(
-                mlvl_feats=mlvl_feats,
+                mlvl_feats=[x],
                 mask=None,
                 pos=None,
             )
@@ -558,14 +565,24 @@ class DepthrHead(AnchorFreeHead):
             )
 
         # out_dec: [num_layers, num_query, bs, dim]
-        outs_dec, _ = self.transformer(
-            x=x,
-            mask=masks,
-            query_embed=query_embeds,
-            pos_embed=pos_embed,
-            reg_branch=self.reg_branches,
-            depth_pos_embed=depth_pos_embed,
-        )
+        if self.only_cross_depth_attn:
+            outs_dec, _ = self.transformer(
+                x=depth_pos_embed,
+                mask=masks,
+                query_embed=query_embeds,
+                pos_embed=pos_embed,
+                reg_branch=self.reg_branches,
+                depth_pos_embed=None,
+            )
+        else:
+            outs_dec, _ = self.transformer(
+                x=x,
+                mask=masks,
+                query_embed=query_embeds,
+                pos_embed=pos_embed,
+                reg_branch=self.reg_branches,
+                depth_pos_embed=depth_pos_embed,
+            )
 
         outs_dec = torch.nan_to_num(outs_dec)
 

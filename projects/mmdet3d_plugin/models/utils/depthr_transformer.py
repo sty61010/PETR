@@ -113,10 +113,13 @@ class DepthrTransformer(BaseModule):
         if depth_pos_embed is not None:
             # print(f'depth_pos_embed: {depth_pos_embed.shape}')
             # defaut 1/32 embed size
-            # depth_pos_embed: [B, N, C, H, W] -> [B, C, N, H, W]
-            depth_pos_embed = depth_pos_embed.permute(0, 2, 1, 3, 4)
-            # depth_pos_embed: [B, C, N, H, W] -> [B, C, N*H*W] -> [N*H*W, B, C]
-            depth_pos_embed = depth_pos_embed.flatten(2).permute(2, 0, 1)
+            # # depth_pos_embed: [B, N, C, H, W] -> [B, C, N, H, W]
+            # depth_pos_embed = depth_pos_embed.permute(0, 2, 1, 3, 4)
+            # # depth_pos_embed: [B, C, N, H, W] -> [B, C, N*H*W] -> [N*H*W, B, C]
+            # depth_pos_embed = depth_pos_embed.flatten(2).permute(2, 0, 1)
+            B, N, C, H, W = depth_pos_embed.shape
+            # depth_pos_embed: [B, N, C, H, W] -> [N*H*W, B, C]
+            depth_pos_embed = depth_pos_embed.permute(1, 3, 4, 0, 2).reshape(-1, B, C)
 
         # out_dec: [num_layers, num_query, bs, dim]
         out_dec = self.decoder(

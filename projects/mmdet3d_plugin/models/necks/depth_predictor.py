@@ -28,6 +28,7 @@ class DepthPredictor(nn.Module):
                  num_levels=4,
                  in_channels=256,
                  depth_maps_down_scale=32,
+                 depth_emb_down_scale=32,
                  encoder=None,
                  ):
         """
@@ -60,6 +61,8 @@ class DepthPredictor(nn.Module):
         #     nn.GroupNorm(32, d_model))
 
         self.depth_maps_down_scale = depth_maps_down_scale
+        self.depth_emb_down_scale = depth_emb_down_scale
+
         # if depth_maps_down_scale == 32:
         #     self.depth_head = nn.Sequential(
         #         nn.Conv2d(in_channels, d_model, kernel_size=(3, 3), stride=(2, 2), padding=1),
@@ -118,7 +121,7 @@ class DepthPredictor(nn.Module):
             weighted_depth: weight-sum value of predicted_depth_maps or gt_depth_maps
                 `depth_map_values: [B, N, H, W]`
         """
-        assert len(mlvl_feats) == self.num_levels
+        # assert len(mlvl_feats) == self.num_levels
         # mlvl_feats (tuple[Tensor]): [B, N, C, H, W]
         B, N, C, H, W = mlvl_feats[0].shape
         # print(f'mlvl_feats: {mlvl_feats[0].shape}')
@@ -146,10 +149,11 @@ class DepthPredictor(nn.Module):
 
         # depth embeddings with depth positional encodings
         BN, C, H, W = src.shape
-        if self.depth_maps_down_scale != 32:
-            src = F.interpolate(src, scale_factor=1 / (32 / self.depth_maps_down_scale), mode='area')
+        if self.depth_maps_down_scale != self.depth_emb_down_scale:
+            src = F.interpolate(src, scale_factor=1 / (self.depth_emb_down_scale /
+                                self.depth_maps_down_scale), mode='area')
             depth_pos_embed_ip = F.interpolate(depth_pos_embed_ip, scale_factor=1 /
-                                               (32 / self.depth_maps_down_scale), mode='area')
+                                               (self.depth_emb_down_scale / self.depth_maps_down_scale), mode='area')
 
             BN, C, H_ds, W_ds = src.shape
             assert H_ds == depth_pos_embed_ip.shape[-2] and W_ds == depth_pos_embed_ip.shape[-1]
@@ -159,7 +163,7 @@ class DepthPredictor(nn.Module):
         # pos = pos.flatten(2).permute(2, 0, 1)
 
         depth_embed = self.depth_encoder(src, mask, pos)
-        if self.depth_maps_down_scale != 32:
+        if self.depth_maps_down_scale != self.depth_emb_down_scale:
             depth_embed = depth_embed.permute(1, 2, 0).reshape(BN, C, H_ds, W_ds)
         else:
             depth_embed = depth_embed.permute(1, 2, 0).reshape(BN, C, H, W)
