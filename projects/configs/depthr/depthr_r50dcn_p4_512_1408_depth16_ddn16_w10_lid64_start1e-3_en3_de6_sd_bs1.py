@@ -108,7 +108,7 @@ model = dict(
             decoder=dict(
                 type='DepthrTransformerDecoder',
                 return_intermediate=True,
-                num_layers=4,
+                num_layers=6,
                 transformerlayers=dict(
                     type='MultiAttentionDecoderLayer',
 
