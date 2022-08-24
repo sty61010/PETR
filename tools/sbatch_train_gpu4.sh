@@ -10,6 +10,8 @@ set -x
 
 CONFIG=$1
 PY_ARGS=${@:2}
+PORT=${PORT:-29005}
 
 PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
-srun python3 -u tools/train.py ${CONFIG} --launcher="slurm" ${PY_ARGS}
+srun python3 -m torch.distributed.launch --master_port=$PORT \
+-u tools/train.py ${CONFIG} --launcher="slurm" ${PY_ARGS}
