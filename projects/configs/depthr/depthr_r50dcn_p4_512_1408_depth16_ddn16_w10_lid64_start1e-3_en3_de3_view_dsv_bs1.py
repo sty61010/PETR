@@ -28,7 +28,7 @@ input_modality = dict(
 embed_dims = 256
 num_levels = 2
 depth_maps_down_scale = 16
-depth_emb_down_scale = 32
+depth_emb_down_scale = 16
 head_in_channels = 256
 depth_start = 1e-3
 depth_num = 64
@@ -108,7 +108,7 @@ model = dict(
             decoder=dict(
                 type='DepthrTransformerDecoder',
                 return_intermediate=True,
-                num_layers=6,
+                num_layers=3,
                 transformerlayers=dict(
                     type='MultiAttentionDecoderLayer',
 

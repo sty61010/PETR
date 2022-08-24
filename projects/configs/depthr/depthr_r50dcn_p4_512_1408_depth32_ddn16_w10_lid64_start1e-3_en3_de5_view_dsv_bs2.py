@@ -108,7 +108,7 @@ model = dict(
             decoder=dict(
                 type='DepthrTransformerDecoder',
                 return_intermediate=True,
-                num_layers=6,
+                num_layers=5,
                 transformerlayers=dict(
                     type='MultiAttentionDecoderLayer',
 
@@ -292,7 +292,7 @@ test_pipeline = [
 
 data_length = 60000
 data = dict(
-    samples_per_gpu=1,
+    samples_per_gpu=2,
     workers_per_gpu=4,
     train=dict(
         type=dataset_type,
@@ -342,12 +342,14 @@ lr_config = dict(
     min_lr_ratio=1e-3,
     # by_epoch=False
 )
-total_epochs = 24
+total_epochs = 26
 evaluation = dict(interval=1, pipeline=test_pipeline)
 find_unused_parameters = False
 
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 load_from = None
 resume_from = None
-# model_size: 32G
+# model_size: 18G
 # 8 gpus bs=1 in TWCC
+# model_size: 30G
+# 4 gpus bs=2 in TWCC
