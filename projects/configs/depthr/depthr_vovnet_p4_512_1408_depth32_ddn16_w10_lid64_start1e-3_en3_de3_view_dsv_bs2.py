@@ -11,8 +11,11 @@ plugin_dir = 'projects/mmdet3d_plugin/'
 point_cloud_range = [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
 voxel_size = [0.2, 0.2, 8]
 
+# img_norm_cfg = dict(
+#     mean=[103.530, 116.280, 123.675], std=[1.0, 1.0, 1.0], to_rgb=False)
+# For vovnet
 img_norm_cfg = dict(
-    mean=[103.530, 116.280, 123.675], std=[1.0, 1.0, 1.0], to_rgb=False)
+    mean=[103.530, 116.280, 123.675], std=[57.375, 57.120, 58.395], to_rgb=False)
 # For nuScenes we usually do 10-class detection
 class_names = [
     'car', 'truck', 'construction_vehicle', 'bus', 'trailer', 'barrier',
@@ -28,7 +31,7 @@ input_modality = dict(
 embed_dims = 256
 num_levels = 2
 depth_maps_down_scale = 16
-depth_emb_down_scale = 16
+depth_emb_down_scale = 32
 head_in_channels = 256
 depth_start = 1e-3
 depth_num = 64
@@ -38,25 +41,17 @@ model = dict(
     type='Depthr3D',
     use_grid_mask=True,
     img_backbone=dict(
-        type='ResNet',
-        depth=50,
-        num_stages=4,
-        out_indices=(2, 3,),
-        frozen_stages=-1,
-        norm_cfg=dict(type='BN2d', requires_grad=False),
+        type='VoVNetCP',
+        spec_name='V-99-eSE',
         norm_eval=True,
-        style='caffe',
-        with_cp=True,
-        dcn=dict(type='DCNv2', deform_groups=1, fallback_on_stride=False),
-        stage_with_dcn=(False, False, True, True),
-        pretrained='ckpts/resnet50_msra-5891d200.pth',
-    ),
+        frozen_stages=-1,
+        input_ch=3,
+        out_features=('stage4', 'stage5',)),
     img_neck=dict(
         type='CPFPN',
-        in_channels=[1024, 2048],
+        in_channels=[768, 1024],
         out_channels=head_in_channels,
-        num_outs=2,
-    ),
+        num_outs=2),
     pts_bbox_head=dict(
         type='DepthrHead',
         num_classes=10,
@@ -102,13 +97,13 @@ model = dict(
                 )
             ),
         ),
-        only_cross_depth_attn=True,
+        only_cross_depth_attn=False,
         transformer=dict(
             type='DepthrTransformer',
             decoder=dict(
                 type='DepthrTransformerDecoder',
                 return_intermediate=True,
-                num_layers=6,
+                num_layers=3,
                 transformerlayers=dict(
                     type='MultiAttentionDecoderLayer',
 
@@ -119,11 +114,11 @@ model = dict(
                             num_heads=8,
                             dropout=0.1),
 
-                        # dict(
-                        #     type='MultiheadAttention',
-                        #     embed_dims=256,
-                        #     num_heads=8,
-                        #     dropout=0.1),
+                        dict(
+                            type='MultiheadAttention',
+                            embed_dims=256,
+                            num_heads=8,
+                            dropout=0.1),
 
                         dict(
                             type='PETRMultiheadAttention',
@@ -135,8 +130,8 @@ model = dict(
                     ffn_dropout=0.1,
                     with_cp=True,
                     operation_order=(
+                        'cross_depth_attn', 'norm',
                         'self_attn', 'norm',
-                        # 'cross_depth_attn', 'norm',
                         'cross_view_attn', 'norm',
                         'ffn', 'norm',
                     )
@@ -292,7 +287,7 @@ test_pipeline = [
 
 data_length = 60000
 data = dict(
-    samples_per_gpu=1,
+    samples_per_gpu=2,
     workers_per_gpu=4,
     train=dict(
         type=dataset_type,
@@ -347,30 +342,9 @@ evaluation = dict(interval=1, pipeline=test_pipeline)
 find_unused_parameters = False
 
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
-load_from = None
+load_from = 'ckpts/fcos3d_vovnet_imgbackbone-remapped.pth'
 resume_from = None
-
-# model_size: 29G
+# model_size: 18G
 # 8 gpus bs=1 in TWCC
-# mAP: 0.2813
-# mATE: 0.8500
-# mASE: 0.7144
-# mAOE: 1.5397
-# mAVE: 1.1223
-# mAAE: 0.2873
-# NDS: 0.2555
-# Eval time: 205.0s
-
-# Per-class results:
-# Object Class    AP      ATE     ASE     AOE     AVE     AAE
-# car     0.473   0.643   0.750   1.582   1.217   0.257
-# truck   0.222   0.917   0.793   1.573   1.096   0.275
-# bus     0.275   0.908   0.857   1.601   2.629   0.470
-# trailer 0.058   1.172   0.852   1.587   0.409   0.053
-# construction_vehicle    0.028   1.120   0.709   1.523   0.144   0.372
-# pedestrian      0.389   0.746   0.334   1.512   0.940   0.482
-# motorcycle      0.266   0.772   0.799   1.539   1.879   0.246
-# bicycle 0.223   0.731   0.811   1.647   0.666   0.145
-# traffic_cone    0.474   0.652   0.350   nan     nan     nan
-# barrier 0.405   0.838   0.888   1.293   nan     nan
-#                 ^M2022-08-21 09:30:51,201 - mmdet - INFO - Exp name: depthr_r50dcn_p4_512_1408_depth16_ddn16_w10_lid64_start1e-3_en3_de6_sd_bs1.py
+# model_size: 24G
+# 4 gpus bs-2 in server

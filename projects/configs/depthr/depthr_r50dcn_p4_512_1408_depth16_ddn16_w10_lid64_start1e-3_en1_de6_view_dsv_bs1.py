@@ -351,3 +351,24 @@ load_from = None
 resume_from = None
 # model_size: 32G
 # 8 gpus bs=1 in TWCC
+# mAP: 0.2802
+# mATE: 0.8704
+# mASE: 0.7097
+# mAOE: 1.5466
+# mAVE: 1.1365
+# mAAE: 0.3370
+# NDS: 0.2484
+# Eval time: 245.9s
+
+# Per-class results:
+# Object Class    AP      ATE     ASE     AOE     AVE     AAE
+# car     0.465   0.653   0.750   1.585   1.527   0.318
+# truck   0.207   0.911   0.793   1.585   1.391   0.339
+# bus     0.279   0.910   0.857   1.557   2.472   0.570
+# trailer 0.080   1.213   0.841   1.599   0.478   0.090
+# construction_vehicle    0.036   1.150   0.715   1.448   0.126   0.400
+# pedestrian      0.385   0.753   0.325   1.560   0.858   0.439
+# motorcycle      0.255   0.857   0.796   1.630   1.556   0.410
+# bicycle 0.228   0.764   0.809   1.647   0.683   0.130
+# traffic_cone    0.475   0.667   0.324   nan     nan     nan
+# barrier 0.392   0.825   0.887   1.308   nan     nan

@@ -28,7 +28,7 @@ input_modality = dict(
 embed_dims = 256
 num_levels = 2
 depth_maps_down_scale = 16
-depth_emb_down_scale = 16
+depth_emb_down_scale = 32
 head_in_channels = 256
 depth_start = 1e-3
 depth_num = 64
@@ -102,13 +102,13 @@ model = dict(
                 )
             ),
         ),
-        only_cross_depth_attn=True,
+        only_cross_depth_attn=False,
         transformer=dict(
             type='DepthrTransformer',
             decoder=dict(
                 type='DepthrTransformerDecoder',
                 return_intermediate=True,
-                num_layers=6,
+                num_layers=3,
                 transformerlayers=dict(
                     type='MultiAttentionDecoderLayer',
 
@@ -119,11 +119,11 @@ model = dict(
                             num_heads=8,
                             dropout=0.1),
 
-                        # dict(
-                        #     type='MultiheadAttention',
-                        #     embed_dims=256,
-                        #     num_heads=8,
-                        #     dropout=0.1),
+                        dict(
+                            type='MultiheadAttention',
+                            embed_dims=256,
+                            num_heads=8,
+                            dropout=0.1),
 
                         dict(
                             type='PETRMultiheadAttention',
@@ -135,8 +135,8 @@ model = dict(
                     ffn_dropout=0.1,
                     with_cp=True,
                     operation_order=(
+                        'cross_depth_attn', 'norm',
                         'self_attn', 'norm',
-                        # 'cross_depth_attn', 'norm',
                         'cross_view_attn', 'norm',
                         'ffn', 'norm',
                     )
@@ -292,7 +292,7 @@ test_pipeline = [
 
 data_length = 60000
 data = dict(
-    samples_per_gpu=1,
+    samples_per_gpu=2,
     workers_per_gpu=4,
     train=dict(
         type=dataset_type,
@@ -349,28 +349,29 @@ find_unused_parameters = False
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 load_from = None
 resume_from = None
-
-# model_size: 29G
+# model_size: G
 # 8 gpus bs=1 in TWCC
-# mAP: 0.2813
-# mATE: 0.8500
-# mASE: 0.7144
-# mAOE: 1.5397
-# mAVE: 1.1223
-# mAAE: 0.2873
-# NDS: 0.2555
-# Eval time: 205.0s
-
-# Per-class results:
-# Object Class    AP      ATE     ASE     AOE     AVE     AAE
-# car     0.473   0.643   0.750   1.582   1.217   0.257
-# truck   0.222   0.917   0.793   1.573   1.096   0.275
-# bus     0.275   0.908   0.857   1.601   2.629   0.470
-# trailer 0.058   1.172   0.852   1.587   0.409   0.053
-# construction_vehicle    0.028   1.120   0.709   1.523   0.144   0.372
-# pedestrian      0.389   0.746   0.334   1.512   0.940   0.482
-# motorcycle      0.266   0.772   0.799   1.539   1.879   0.246
-# bicycle 0.223   0.731   0.811   1.647   0.666   0.145
-# traffic_cone    0.474   0.652   0.350   nan     nan     nan
-# barrier 0.405   0.838   0.888   1.293   nan     nan
-#                 ^M2022-08-21 09:30:51,201 - mmdet - INFO - Exp name: depthr_r50dcn_p4_512_1408_depth16_ddn16_w10_lid64_start1e-3_en3_de6_sd_bs1.py
+# model_size: 22G
+# 4 gpus bs=2 in server
+# mAP: 0.3126                                                                                                                                                                                                
+# mATE: 0.8358                                                                                                                                                                                               
+# mASE: 0.2806                                                                                                                                                                                               
+# mAOE: 0.6683                                                                                                                                                                                               
+# mAVE: 1.0957                                                                                                                                                                                               
+# mAAE: 0.2600                                                                                                                                                                                               
+# NDS: 0.3518                                                                                                                                                                                                
+# Eval time: 181.7s                                                                                                                                                                                          
+                                                                                                                                                                                                           
+# Per-class results:                                                                                                                                                                                         
+# Object Class    AP      ATE     ASE     AOE     AVE     AAE                                                                                                                                                
+# car     0.493   0.624   0.156   0.128   1.281   0.250                                                                                                                                                      
+# truck   0.256   0.878   0.237   0.222   1.142   0.276                                                                                                                                                      
+# bus     0.321   0.879   0.211   0.224   2.648   0.503                                                                                                                                                      
+# trailer 0.099   1.203   0.253   0.613   0.493   0.080                                                                                                                                                      
+# construction_vehicle    0.064   1.076   0.486   1.362   0.117   0.370                                                                                                                                      
+# pedestrian      0.411   0.739   0.297   1.058   0.809   0.373                                                                                                                                              
+# motorcycle      0.298   0.784   0.266   0.991   1.689   0.178                                                                                                                                              
+# bicycle 0.273   0.751   0.284   1.227   0.586   0.050
+# traffic_cone    0.493   0.618   0.332   nan     nan     nan
+# barrier 0.418   0.807   0.284   0.190   nan     nan
+# 2022-08-23 16:48:48,379 - mmdet - INFO - Exp name: depthr_r50dcn_p4_512_1408_depth32_ddn16_w10_lid64_start1e-3_en3_de3_view_dsv_bs2.py

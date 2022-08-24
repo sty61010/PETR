@@ -290,7 +290,6 @@ resume_from = None
 # barrier 0.419   0.824   0.281   0.160   nan     nan
 
 # 16 gpus bs=1 in TWCC
-
 # mAP: 0.2953
 # mATE: 0.8683
 # mASE: 0.7101
@@ -313,3 +312,28 @@ resume_from = None
 # traffic_cone    0.470   0.662   0.331   nan     nan     nan
 # barrier 0.386   0.820   0.886   1.298   nan     nan
 # 00: 08 < 00: 00, 1550.97it/s] ^ M ^ M2022-08-10 12: 12: 54, 803 - mmdet - INFO - Exp name: petr_r50dcn_gridmask_p4.py
+
+# 8 gpus bs=1 in TWCC
+# mAP: 0.3171
+#  mATE: 0.8276
+#  mASE: 0.7073
+#  mAOE: 1.5554
+#  mAVE: 1.0322
+#  mAAE: 0.2531
+#  NDS: 0.2797
+#  Eval time: 217.3s
+
+#  Per-class results:
+#  Object Class    AP      ATE     ASE     AOE     AVE     AAE
+#  car     0.504   0.604   0.750   1.593   1.226   0.246
+#  truck   0.267   0.854   0.794   1.611   1.009   0.247
+#  bus     0.336   0.873   0.860   1.559   2.385   0.466
+#  trailer 0.107   1.136   0.824   1.574   0.605   0.110
+#  construction_vehicle    0.059   1.132   0.699   1.496   0.129   0.381
+#  pedestrian      0.413   0.729   0.326   1.557   0.805   0.370
+#  motorcycle      0.304   0.778   0.795   1.596   1.608   0.174
+#  bicycle 0.273   0.750   0.812   1.726   0.490   0.030
+#  traffic_cone    0.496   0.599   0.326   nan     nan     nan
+#  barrier 0.414   0.822   0.887   1.285   nan     nan
+#  00: 08 < 00: 00, 1541.49it/s] ^ M ^ M2022-08-12 17: 04: 24, 522 - mmdet - INFO - Exp name: petr_r50dcn_gridmask_p4.py
+# 2022-08-12 17: 04: 24, 533 - mmdet - INFO - Epoch(val)[24][753]   pts_bbox_NuScenes/car_AP_dist_0.5: 0.1270, pts_bbox_NuScenes/car_AP_dist_1.0: 0.3879, pts_bbox_N
