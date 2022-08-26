@@ -353,24 +353,24 @@ resume_from = None
 # 8 gpus bs=1 in TWCC
 # model_size: 22G
 # 4 gpus bs=2 in server
-# mAP: 0.3126                                                                                                                                                                                                
-# mATE: 0.8358                                                                                                                                                                                               
-# mASE: 0.2806                                                                                                                                                                                               
-# mAOE: 0.6683                                                                                                                                                                                               
-# mAVE: 1.0957                                                                                                                                                                                               
-# mAAE: 0.2600                                                                                                                                                                                               
-# NDS: 0.3518                                                                                                                                                                                                
-# Eval time: 181.7s                                                                                                                                                                                          
-                                                                                                                                                                                                           
-# Per-class results:                                                                                                                                                                                         
-# Object Class    AP      ATE     ASE     AOE     AVE     AAE                                                                                                                                                
-# car     0.493   0.624   0.156   0.128   1.281   0.250                                                                                                                                                      
-# truck   0.256   0.878   0.237   0.222   1.142   0.276                                                                                                                                                      
-# bus     0.321   0.879   0.211   0.224   2.648   0.503                                                                                                                                                      
-# trailer 0.099   1.203   0.253   0.613   0.493   0.080                                                                                                                                                      
-# construction_vehicle    0.064   1.076   0.486   1.362   0.117   0.370                                                                                                                                      
-# pedestrian      0.411   0.739   0.297   1.058   0.809   0.373                                                                                                                                              
-# motorcycle      0.298   0.784   0.266   0.991   1.689   0.178                                                                                                                                              
+# mAP: 0.3126
+# mATE: 0.8358
+# mASE: 0.2806
+# mAOE: 0.6683
+# mAVE: 1.0957
+# mAAE: 0.2600
+# NDS: 0.3518
+# Eval time: 181.7s
+
+# Per-class results:
+# Object Class    AP      ATE     ASE     AOE     AVE     AAE
+# car     0.493   0.624   0.156   0.128   1.281   0.250
+# truck   0.256   0.878   0.237   0.222   1.142   0.276
+# bus     0.321   0.879   0.211   0.224   2.648   0.503
+# trailer 0.099   1.203   0.253   0.613   0.493   0.080
+# construction_vehicle    0.064   1.076   0.486   1.362   0.117   0.370
+# pedestrian      0.411   0.739   0.297   1.058   0.809   0.373
+# motorcycle      0.298   0.784   0.266   0.991   1.689   0.178
 # bicycle 0.273   0.751   0.284   1.227   0.586   0.050
 # traffic_cone    0.493   0.618   0.332   nan     nan     nan
 # barrier 0.418   0.807   0.284   0.190   nan     nan
