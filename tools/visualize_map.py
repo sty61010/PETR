@@ -51,6 +51,6 @@ if __name__ == '__main__':
     draw(recalls, all_models_precisions, title=args.class_name, xlabel='Recall', ylabel='Precision')
 
     if not args.output_image:
-        args.output_image = Path(f'mAP_of_{args.class_name}_{"-".join([json_dir.stem for json_dir in args.json_dirs])}.jpg')
+        args.output_image = Path(f'PR_curve_{args.class_name}_{"-".join([json_dir.stem for json_dir in args.json_dirs])}.jpg')
     plt.savefig(args.output_image, bbox_inches='tight')
     print(f"\033[32;1mSaved image to '{args.output_image.relative_to('.')}'\033[0m")
