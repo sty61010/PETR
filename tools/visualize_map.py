@@ -48,7 +48,7 @@ if __name__ == '__main__':
             args.class_name) for json_dir in args.json_dirs}
 
     assert np.all(np.array([len(precisions) for precisions in all_models_precisions.values()]) == len(recalls))
-    draw(recalls, all_models_precisions, title=f'mAP of {args.class_name}', xlabel='Recall', ylabel='Precision')
+    draw(recalls, all_models_precisions, title=args.class_name, xlabel='Recall', ylabel='Precision')
 
     if not args.output_image:
         args.output_image = Path(f'mAP_of_{args.class_name}_{"-".join([json_dir.stem for json_dir in args.json_dirs])}.jpg')
