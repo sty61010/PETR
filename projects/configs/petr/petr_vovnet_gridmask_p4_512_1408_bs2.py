@@ -255,4 +255,26 @@ resume_from = None
 
 
 # model_size: 24G
-# 4 gpus bs-2 in server
+# 3 gpus bs-2 in lab
+# mAP: 0.4001
+# mATE: 0.7288
+# mASE: 0.2657
+# mAOE: 0.4149
+# mAVE: 0.8343
+# mAAE: 0.2108
+# NDS: 0.4546
+# Eval time: 114.8s
+
+# Per-class results:
+# Object Class    AP      ATE     ASE     AOE     AVE     AAE
+# car     0.587   0.520   0.149   0.072   0.841   0.214
+# truck   0.362   0.748   0.208   0.097   0.825   0.244
+# bus     0.466   0.698   0.195   0.129   2.015   0.366
+# trailer 0.195   1.038   0.231   0.582   0.627   0.141
+# construction_vehicle    0.090   1.093   0.479   1.037   0.174   0.330
+# pedestrian      0.479   0.665   0.289   0.529   0.465   0.211ss
+# motorcycle      0.394   0.711   0.250   0.456   1.226   0.158
+# bicycle 0.396   0.625   0.257   0.686   0.501   0.021
+# traffic_cone    0.552   0.548   0.311   nan     nan     nan
+# barrier 0.480   0.643   0.287   0.147   nan     nan
+# 2022-08-27 00: 24: 16, 691 - mmdet - INFO - Exp name: petr_vovnet_gridmask_p4_512_1408_bs2.py

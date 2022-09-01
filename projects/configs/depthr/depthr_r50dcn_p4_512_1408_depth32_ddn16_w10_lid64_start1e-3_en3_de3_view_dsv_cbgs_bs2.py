@@ -49,7 +49,7 @@ model = dict(
         with_cp=True,
         dcn=dict(type='DCNv2', deform_groups=1, fallback_on_stride=False),
         stage_with_dcn=(False, False, True, True),
-        pretrained='ckpts/resnet50_msra-5891d200.pth',
+        # pretrained='ckpts/resnet50_msra-5891d200.pth',
     ),
     img_neck=dict(
         type='CPFPN',
@@ -83,7 +83,7 @@ model = dict(
             depth_emb_down_scale=depth_emb_down_scale,
             encoder=dict(
                 type='DetrTransformerEncoder',
-                num_layers=1,
+                num_layers=3,
                 transformerlayers=dict(
                     type='BaseTransformerLayer',
                     attn_cfgs=[
@@ -290,37 +290,70 @@ test_pipeline = [
         ])
 ]
 
-data_length = 60000
+# data_length = 60000
+# data = dict(
+#     samples_per_gpu=2,
+#     workers_per_gpu=4,
+#     train=dict(
+#         type=dataset_type,
+#         data_root=data_root,
+#         ann_file=data_root + 'nuscenes_infos_train.pkl',
+#         pipeline=train_pipeline,
+#         classes=class_names,
+#         modality=input_modality,
+#         test_mode=False,
+#         use_valid_flag=True,
+#         # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
+#         # and box_type_3d='Depth' in sunrgbd and scannet dataset.
+#         box_type_3d='LiDAR',
+#         data_length=data_length,
+#     ),
+#     val=dict(
+#         type=dataset_type,
+#         pipeline=test_pipeline,
+#         classes=class_names,
+#         modality=input_modality
+#     ),
+#     test=dict(
+#         type=dataset_type,
+#         pipeline=test_pipeline,
+#         classes=class_names,
+#         modality=input_modality
+#     )
+# )
+
 data = dict(
     samples_per_gpu=2,
     workers_per_gpu=4,
     train=dict(
-        type=dataset_type,
-        data_root=data_root,
-        ann_file=data_root + 'nuscenes_infos_train.pkl',
-        pipeline=train_pipeline,
-        classes=class_names,
-        modality=input_modality,
-        test_mode=False,
-        use_valid_flag=True,
-        # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
-        # and box_type_3d='Depth' in sunrgbd and scannet dataset.
-        box_type_3d='LiDAR',
-        data_length=data_length,
+        type='CBGSDataset',
+        dataset=dict(
+            type=dataset_type,
+            data_root=data_root,
+            ann_file=data_root + 'nuscenes_infos_train.pkl',
+            pipeline=train_pipeline,
+            classes=class_names,
+            modality=input_modality,
+            test_mode=False,
+            use_valid_flag=True,
+            # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
+            # and box_type_3d='Depth' in sunrgbd and scannet dataset.
+            box_type_3d='LiDAR'),
     ),
     val=dict(
         type=dataset_type,
         pipeline=test_pipeline,
         classes=class_names,
-        modality=input_modality
+        modality=input_modality,
     ),
     test=dict(
         type=dataset_type,
         pipeline=test_pipeline,
         classes=class_names,
-        modality=input_modality
+        modality=input_modality,
     )
 )
+
 
 optimizer = dict(
     type='AdamW',
@@ -342,37 +375,39 @@ lr_config = dict(
     min_lr_ratio=1e-3,
     # by_epoch=False
 )
-total_epochs = 24
+total_epochs = 28
 evaluation = dict(interval=1, pipeline=test_pipeline)
 find_unused_parameters = False
 
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
-load_from = None
+# load_from = None
+load_from = 'ckpts/fcos3d.pth'
+
 resume_from = None
+
 # model_size: G
 # 8 gpus bs=1 in TWCC
-
 # model_size: 22G
 # 4 gpus bs=2 in server
-# mAP: 0.3123
-# mATE: 0.8412
-# mASE: 0.2782
-# mAOE: 0.6887
-# mAVE: 1.1083
-# mAAE: 0.3111
-# NDS: 0.3443
-# Eval time: 191.0s
+# mAP: 0.3126
+# mATE: 0.8358
+# mASE: 0.2806
+# mAOE: 0.6683
+# mAVE: 1.0957
+# mAAE: 0.2600
+# NDS: 0.3518
+# Eval time: 181.7s
 
 # Per-class results:
 # Object Class    AP      ATE     ASE     AOE     AVE     AAE
-# car     0.499   0.607   0.153   0.145   1.430   0.298
-# truck   0.255   0.883   0.238   0.255   1.207   0.314
-# bus     0.322   0.904   0.200   0.254   2.290   0.444
-# trailer 0.090   1.181   0.238   0.660   0.521   0.126
-# construction_vehicle    0.062   1.119   0.501   1.256   0.196   0.357
-# pedestrian      0.409   0.743   0.297   1.096   0.847   0.544
-# motorcycle      0.288   0.827   0.277   0.963   1.687   0.290
-# bicycle 0.274   0.740   0.275   1.380   0.689   0.116
-# traffic_cone    0.502   0.619   0.323   nan     nan     nan
-# barrier 0.422   0.789   0.280   0.189   nan     nan
-# 2022-08-22 03:16:19,688 - mmdet - INFO - Exp name: depthr_r50dcn_p4_512_1408_depth32_ddn16_w10_lid64_start1e-3_en1_de3_view_dsv_bs2.py
+# car     0.493   0.624   0.156   0.128   1.281   0.250
+# truck   0.256   0.878   0.237   0.222   1.142   0.276
+# bus     0.321   0.879   0.211   0.224   2.648   0.503
+# trailer 0.099   1.203   0.253   0.613   0.493   0.080
+# construction_vehicle    0.064   1.076   0.486   1.362   0.117   0.370
+# pedestrian      0.411   0.739   0.297   1.058   0.809   0.373
+# motorcycle      0.298   0.784   0.266   0.991   1.689   0.178
+# bicycle 0.273   0.751   0.284   1.227   0.586   0.050
+# traffic_cone    0.493   0.618   0.332   nan     nan     nan
+# barrier 0.418   0.807   0.284   0.190   nan     nan
+# 2022-08-23 16:48:48,379 - mmdet - INFO - Exp name: depthr_r50dcn_p4_512_1408_depth32_ddn16_w10_lid64_start1e-3_en3_de3_view_dsv_bs2.py
