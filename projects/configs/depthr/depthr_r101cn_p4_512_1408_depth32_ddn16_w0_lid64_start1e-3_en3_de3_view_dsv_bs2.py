@@ -10,6 +10,7 @@ plugin_dir = 'projects/mmdet3d_plugin/'
 # cloud range accordingly
 point_cloud_range = [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
 voxel_size = [0.2, 0.2, 8]
+
 img_norm_cfg = dict(
     mean=[103.530, 116.280, 123.675], std=[1.0, 1.0, 1.0], to_rgb=False)
 # For nuScenes we usually do 10-class detection
@@ -22,50 +23,108 @@ input_modality = dict(
     use_camera=True,
     use_radar=False,
     use_map=False,
-    use_external=False
+    use_external=False,
 )
+embed_dims = 256
+num_levels = 2
+depth_maps_down_scale = 16
+depth_emb_down_scale = 32
+head_in_channels = 256
+depth_start = 1e-3
+depth_num = 64
+position_range = [-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]
 
 model = dict(
-    type='Petr3D',
+    type='Depthr3D',
     use_grid_mask=True,
     img_backbone=dict(
         type='ResNet',
         depth=101,
         num_stages=4,
-        out_indices=(3,),
-        frozen_stages=-1,
+        out_indices=(2, 3,),
+        frozen_stages=1,
         norm_cfg=dict(type='BN2d', requires_grad=False),
         norm_eval=True,
         style='caffe',
         with_cp=True,
         dcn=dict(type='DCNv2', deform_groups=1, fallback_on_stride=False),
         stage_with_dcn=(False, False, True, True),
-        pretrained='ckpts/resnet101_msra-6cc46731.pth',
+        # pretrained='ckpts/resnet50_msra-5891d200.pth',
+    ),
+    img_neck=dict(
+        type='CPFPN',
+        in_channels=[1024, 2048],
+        out_channels=head_in_channels,
+        num_outs=2,
     ),
     pts_bbox_head=dict(
-        type='PETRHead',
+        type='DepthrHead',
         num_classes=10,
-        in_channels=2048,
+        in_channels=head_in_channels,
         num_query=900,
         LID=True,
         with_position=True,
         with_multiview=True,
-        position_range=[-61.2, -61.2, -10.0, 61.2, 61.2, 10.0],
+        depth_num=depth_num,
+        depth_start=depth_start,
+        embed_dims=embed_dims,
+        position_range=position_range,
         normedlinear=False,
-        transformer=dict(
-            type='PETRTransformer',
-            decoder=dict(
-                type='PETRTransformerDecoder',
-                return_intermediate=True,
-                num_layers=6,
+
+        depth_predictor=dict(
+            type='DepthPredictor',
+            num_depth_bins=depth_num,
+            depth_min=depth_start,
+            depth_max=position_range[3],
+            embed_dims=embed_dims,
+            num_levels=num_levels,
+            in_channels=embed_dims,
+            depth_maps_down_scale=depth_maps_down_scale,
+            depth_emb_down_scale=depth_emb_down_scale,
+            encoder=dict(
+                type='DetrTransformerEncoder',
+                num_layers=3,
                 transformerlayers=dict(
-                    type='PETRTransformerDecoderLayer',
+                    type='BaseTransformerLayer',
+                    attn_cfgs=[
+                        dict(
+                            type='MultiheadAttention',
+                            embed_dims=embed_dims,
+                            num_heads=8,
+                            dropout=0.1)
+                    ],
+                    feedforward_channels=256,
+                    ffn_dropout=0.1,
+                    operation_order=(
+                        'self_attn', 'norm',
+                        'ffn', 'norm',
+                    )
+                )
+            ),
+        ),
+        only_cross_depth_attn=False,
+        transformer=dict(
+            type='DepthrTransformer',
+            decoder=dict(
+                type='DepthrTransformerDecoder',
+                return_intermediate=True,
+                num_layers=3,
+                transformerlayers=dict(
+                    type='MultiAttentionDecoderLayer',
+
                     attn_cfgs=[
                         dict(
                             type='MultiheadAttention',
                             embed_dims=256,
                             num_heads=8,
                             dropout=0.1),
+
+                        dict(
+                            type='MultiheadAttention',
+                            embed_dims=256,
+                            num_heads=8,
+                            dropout=0.1),
+
                         dict(
                             type='PETRMultiheadAttention',
                             embed_dims=256,
@@ -75,8 +134,13 @@ model = dict(
                     feedforward_channels=2048,
                     ffn_dropout=0.1,
                     with_cp=True,
-                    operation_order=('self_attn', 'norm', 'cross_attn', 'norm',
-                                     'ffn', 'norm')),
+                    operation_order=(
+                        'cross_depth_attn', 'norm',
+                        'self_attn', 'norm',
+                        'cross_view_attn', 'norm',
+                        'ffn', 'norm',
+                    )
+                ),
             )),
         bbox_coder=dict(
             type='NMSFreeCoder',
@@ -93,9 +157,26 @@ model = dict(
             use_sigmoid=True,
             gamma=2.0,
             alpha=0.25,
-            loss_weight=2.0),
-        loss_bbox=dict(type='L1Loss', loss_weight=0.25),
-        loss_iou=dict(type='GIoULoss', loss_weight=0.0)),
+            loss_weight=2.0,
+        ),
+        loss_bbox=dict(
+            type='L1Loss',
+            loss_weight=0.25,
+        ),
+        loss_iou=dict(
+            type='GIoULoss',
+            loss_weight=0.0,
+        ),
+        # loss_ddn=dict(
+        #     type='DDNLoss',
+        #     alpha=0.25,
+        #     gamma=2.0,
+        #     fg_weight=13,
+        #     bg_weight=1,
+        #     downsample_factor=depth_maps_down_scale,
+        #     loss_weight=1.0,
+        # ),
+    ),
     # model training and testing settings
     train_cfg=dict(pts=dict(
         grid_size=[512, 512, 1],
@@ -149,6 +230,7 @@ db_sampler = dict(
         load_dim=5,
         use_dim=[0, 1, 2, 3, 4],
         file_client_args=file_client_args))
+
 ida_aug_conf = {
     "resize_lim": (0.8, 1.0),
     "final_dim": (512, 1408),
@@ -158,11 +240,13 @@ ida_aug_conf = {
     "W": 1600,
     "rand_flip": True,
 }
+
 train_pipeline = [
     dict(type='LoadMultiViewImageFromFiles', to_float32=True),
     dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True, with_attr_label=False),
     dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
     dict(type='ObjectNameFilter', classes=class_names),
+
     dict(type='ResizeCropFlipImage', data_aug_conf=ida_aug_conf, training=True),
     dict(type='GlobalRotScaleTransImage',
          rot_range=[-0.3925, 0.3925],
@@ -171,6 +255,7 @@ train_pipeline = [
          reverse_angle=True,
          training=True
          ),
+
     dict(type='NormalizeMultiviewImage', **img_norm_cfg),
     dict(type='PadMultiViewImage', size_divisor=32),
     dict(type='DefaultFormatBundle3D', class_names=class_names),
@@ -178,7 +263,13 @@ train_pipeline = [
 ]
 test_pipeline = [
     dict(type='LoadMultiViewImageFromFiles', to_float32=True),
+
+    dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True, with_attr_label=False),
+    dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
+    dict(type='ObjectNameFilter', classes=class_names),
+
     dict(type='ResizeCropFlipImage', data_aug_conf=ida_aug_conf, training=False),
+
     dict(type='NormalizeMultiviewImage', **img_norm_cfg),
     dict(type='PadMultiViewImage', size_divisor=32),
     dict(
@@ -191,13 +282,18 @@ test_pipeline = [
                 type='DefaultFormatBundle3D',
                 class_names=class_names,
                 with_label=False),
-            dict(type='Collect3D', keys=['img'])
+            dict(
+                type='Collect3D',
+                keys=['gt_bboxes_3d', 'gt_labels_3d', 'img'],
+            ),
+            # dict(type='Collect3D', keys=['img'])
         ])
 ]
 
+data_length = 60000
 data = dict(
-    samples_per_gpu=8,
-    workers_per_gpu=8,
+    samples_per_gpu=2,
+    workers_per_gpu=4,
     train=dict(
         type=dataset_type,
         data_root=data_root,
@@ -209,7 +305,9 @@ data = dict(
         use_valid_flag=True,
         # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
         # and box_type_3d='Depth' in sunrgbd and scannet dataset.
-        box_type_3d='LiDAR'),
+        box_type_3d='LiDAR',
+        data_length=data_length,
+    ),
     val=dict(
         type=dataset_type,
         pipeline=test_pipeline,
@@ -249,30 +347,11 @@ evaluation = dict(interval=1, pipeline=test_pipeline)
 find_unused_parameters = False
 
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
-load_from = None
+# load_from = None
+load_from = 'ckpts/fcos3d.pth'
 resume_from = None
 
-# gpu=2, bs=9
-# Evaluating bboxes of pts_bbox
-# mAP: 0.3259
-# mATE: 0.8242
-# mASE: 0.2833
-# mAOE: 0.5926
-# mAVE: 0.9622
-# mAAE: 0.2458
-# NDS: 0.3721
-# Eval time: 232.5s
-
-# Per-class results:
-# Object Class    AP      ATE     ASE     AOE     AVE     AAE
-# car     0.510   0.612   0.155   0.112   1.083   0.244
-# truck   0.267   0.856   0.233   0.207   0.969   0.284
-# bus     0.335   0.878   0.220   0.156   2.044   0.420
-# trailer 0.126   1.100   0.251   0.454   0.545   0.113
-# construction_vehicle    0.064   1.104   0.498   1.121   0.161   0.385
-# pedestrian      0.412   0.742   0.297   1.070   0.810   0.328
-# motorcycle      0.319   0.786   0.262   0.936   1.534   0.157
-# bicycle 0.295   0.734   0.290   1.109   0.552   0.035
-# traffic_cone    0.497   0.653   0.337   nan     nan     nan
-# barrier 0.434   0.777   0.290   0.167   nan     nan
-# 2022-09-03 13:21:17,301 - mmdet - INFO - Exp name: petr_r101cn_gridmask_c5.py
+# model_size: G
+# 8 gpus bs=1 in TWCC
+# model_size: 22G
+# 4 gpus bs=2 in server

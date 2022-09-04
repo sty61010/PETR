@@ -119,7 +119,7 @@ ckpts/
 data/
 mmdetection3d/
 exps/
-
+result_vis/
 *~
 mmdet3d/.mim
 
