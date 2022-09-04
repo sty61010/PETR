@@ -107,7 +107,7 @@ class CustomNuScenesDataset(NuScenesDataset):
                     extrinsics=extrinsics
                 ))
 
-        # if not self.test_mode:
-        annos = self.get_ann_info(index)
-        input_dict['ann_info'] = annos
+        if not self.test_mode:
+            annos = self.get_ann_info(index)
+            input_dict['ann_info'] = annos
         return input_dict
