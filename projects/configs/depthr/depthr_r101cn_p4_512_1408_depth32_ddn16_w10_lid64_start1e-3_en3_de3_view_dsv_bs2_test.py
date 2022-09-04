@@ -316,8 +316,8 @@ data = dict(
     ),
     test=dict(
         type=dataset_type,
-        # data_root=data_root,
-        # ann_file=data_root + 'nuscenes_infos_test.pkl',
+        data_root=data_root,
+        ann_file=data_root + 'nuscenes_infos_test.pkl',
         pipeline=test_pipeline,
         classes=class_names,
         modality=input_modality
