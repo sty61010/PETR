@@ -13,4 +13,4 @@ CHECKPOINT=$2
 PY_ARGS=${@:3}
 
 PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
-srun python3 -u tools/test.py ${CONFIG} ${CHECKPOINT}--launcher="slurm" ${PY_ARGS}
+srun python3 -u tools/test.py ${CONFIG} ${CHECKPOINT} --launcher="slurm" ${PY_ARGS}
