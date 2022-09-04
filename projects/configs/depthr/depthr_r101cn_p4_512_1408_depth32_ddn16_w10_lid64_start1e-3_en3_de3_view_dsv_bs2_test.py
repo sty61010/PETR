@@ -19,7 +19,7 @@ class_names = [
     'motorcycle', 'bicycle', 'pedestrian', 'traffic_cone'
 ]
 input_modality = dict(
-    use_lidar=True,
+    use_lidar=False,
     use_camera=True,
     use_radar=False,
     use_map=False,
@@ -264,9 +264,9 @@ train_pipeline = [
 test_pipeline = [
     dict(type='LoadMultiViewImageFromFiles', to_float32=True),
 
-    dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True, with_attr_label=False),
-    dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
-    dict(type='ObjectNameFilter', classes=class_names),
+    # dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True, with_attr_label=False),
+    # dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
+    # dict(type='ObjectNameFilter', classes=class_names),
 
     dict(type='ResizeCropFlipImage', data_aug_conf=ida_aug_conf, training=False),
 
@@ -282,11 +282,11 @@ test_pipeline = [
                 type='DefaultFormatBundle3D',
                 class_names=class_names,
                 with_label=False),
-            dict(
-                type='Collect3D',
-                keys=['gt_bboxes_3d', 'gt_labels_3d', 'img'],
-            ),
-            # dict(type='Collect3D', keys=['img'])
+            # dict(
+            #     type='Collect3D',
+            #     keys=['gt_bboxes_3d', 'gt_labels_3d', 'img'],
+            # ),
+            dict(type='Collect3D', keys=['img'])
         ])
 ]
 
@@ -316,8 +316,8 @@ data = dict(
     ),
     test=dict(
         type=dataset_type,
-        data_root=data_root,
-        ann_file=data_root + 'nuscenes_infos_test.pkl',
+        # data_root=data_root,
+        # ann_file=data_root + 'nuscenes_infos_test.pkl',
         pipeline=test_pipeline,
         classes=class_names,
         modality=input_modality
