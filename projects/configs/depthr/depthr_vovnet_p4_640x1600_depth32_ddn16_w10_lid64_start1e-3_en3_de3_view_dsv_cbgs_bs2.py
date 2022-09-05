@@ -281,37 +281,70 @@ test_pipeline = [
         ])
 ]
 
-data_length = 60000
+# data_length = 60000
+# data = dict(
+#     samples_per_gpu=1,
+#     workers_per_gpu=4,
+#     train=dict(
+#         type=dataset_type,
+#         data_root=data_root,
+#         ann_file=data_root + 'nuscenes_infos_train.pkl',
+#         pipeline=train_pipeline,
+#         classes=class_names,
+#         modality=input_modality,
+#         test_mode=False,
+#         use_valid_flag=True,
+#         # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
+#         # and box_type_3d='Depth' in sunrgbd and scannet dataset.
+#         box_type_3d='LiDAR',
+#         data_length=data_length,
+#     ),
+#     val=dict(
+#         type=dataset_type,
+#         pipeline=test_pipeline,
+#         classes=class_names,
+#         modality=input_modality
+#     ),
+#     test=dict(
+#         type=dataset_type,
+#         pipeline=test_pipeline,
+#         classes=class_names,
+#         modality=input_modality
+#     )
+# )
+
 data = dict(
-    samples_per_gpu=1,
+    samples_per_gpu=2,
     workers_per_gpu=4,
     train=dict(
-        type=dataset_type,
-        data_root=data_root,
-        ann_file=data_root + 'nuscenes_infos_train.pkl',
-        pipeline=train_pipeline,
-        classes=class_names,
-        modality=input_modality,
-        test_mode=False,
-        use_valid_flag=True,
-        # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
-        # and box_type_3d='Depth' in sunrgbd and scannet dataset.
-        box_type_3d='LiDAR',
-        data_length=data_length,
+        type='CBGSDataset',
+        dataset=dict(
+            type=dataset_type,
+            data_root=data_root,
+            ann_file=data_root + 'nuscenes_infos_train.pkl',
+            pipeline=train_pipeline,
+            classes=class_names,
+            modality=input_modality,
+            test_mode=False,
+            use_valid_flag=True,
+            # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
+            # and box_type_3d='Depth' in sunrgbd and scannet dataset.
+            box_type_3d='LiDAR'),
     ),
     val=dict(
         type=dataset_type,
         pipeline=test_pipeline,
         classes=class_names,
-        modality=input_modality
+        modality=input_modality,
     ),
     test=dict(
         type=dataset_type,
         pipeline=test_pipeline,
         classes=class_names,
-        modality=input_modality
+        modality=input_modality,
     )
 )
+
 optimizer = dict(
     type='AdamW',
     lr=2e-4,
@@ -333,7 +366,7 @@ lr_config = dict(
     min_lr_ratio=1e-3,
     # by_epoch=False
 )
-total_epochs = 24
+total_epochs = 28
 evaluation = dict(interval=1, pipeline=test_pipeline)
 find_unused_parameters = False
 

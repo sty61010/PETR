@@ -19,7 +19,7 @@ class_names = [
     'motorcycle', 'bicycle', 'pedestrian', 'traffic_cone'
 ]
 input_modality = dict(
-    use_lidar=True,
+    use_lidar=False,
     use_camera=True,
     use_radar=False,
     use_map=False,
@@ -389,25 +389,25 @@ resume_from = None
 # 8 gpus bs=1 in TWCC
 # model_size: 22G
 # 4 gpus bs=2 in server
-# mAP: 0.3126
-# mATE: 0.8358
-# mASE: 0.2806
-# mAOE: 0.6683
-# mAVE: 1.0957
-# mAAE: 0.2600
-# NDS: 0.3518
-# Eval time: 181.7s
+# mAP: 0.3232
+# mATE: 0.7644
+# mASE: 0.2700
+# mAOE: 0.5629
+# mAVE: 0.8722
+# mAAE: 0.2097
+# NDS: 0.3937
+# Eval time: 190.4s
 
 # Per-class results:
 # Object Class    AP      ATE     ASE     AOE     AVE     AAE
-# car     0.493   0.624   0.156   0.128   1.281   0.250
-# truck   0.256   0.878   0.237   0.222   1.142   0.276
-# bus     0.321   0.879   0.211   0.224   2.648   0.503
-# trailer 0.099   1.203   0.253   0.613   0.493   0.080
-# construction_vehicle    0.064   1.076   0.486   1.362   0.117   0.370
-# pedestrian      0.411   0.739   0.297   1.058   0.809   0.373
-# motorcycle      0.298   0.784   0.266   0.991   1.689   0.178
-# bicycle 0.273   0.751   0.284   1.227   0.586   0.050
-# traffic_cone    0.493   0.618   0.332   nan     nan     nan
-# barrier 0.418   0.807   0.284   0.190   nan     nan
-# 2022-08-23 16:48:48,379 - mmdet - INFO - Exp name: depthr_r50dcn_p4_512_1408_depth32_ddn16_w10_lid64_start1e-3_en3_de3_view_dsv_bs2.py
+# car     0.517   0.587   0.151   0.103   0.974   0.214
+# truck   0.261   0.831   0.225   0.156   0.741   0.216
+# bus     0.333   0.822   0.207   0.160   2.042   0.343
+# trailer 0.129   1.049   0.252   0.603   0.504   0.127
+# construction_vehicle    0.060   0.984   0.448   1.099   0.135   0.348
+# pedestrian      0.386   0.720   0.302   1.041   0.796   0.245
+# motorcycle      0.296   0.763   0.263   0.813   1.319   0.170
+# bicycle 0.273   0.694   0.252   0.968   0.466   0.014
+# traffic_cone    0.506   0.576   0.319   nan     nan     nan
+# barrier 0.471   0.618   0.281   0.124   nan     nan
+# 2022-09-05 11: 12: 22, 661 - mmdet - INFO - Exp name: depthr_r50dcn_p4_512_1408_depth32_ddn16_w10_lid64_start1e-3_en3_de3_view_dsv_cbgs_bs2.py

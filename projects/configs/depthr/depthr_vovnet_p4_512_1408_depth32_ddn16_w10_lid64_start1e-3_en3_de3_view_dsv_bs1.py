@@ -1,4 +1,3 @@
-
 _base_ = [
     '../../../mmdetection3d/configs/_base_/datasets/nus-3d.py',
     '../../../mmdetection3d/configs/_base_/default_runtime.py'
@@ -11,6 +10,10 @@ plugin_dir = 'projects/mmdet3d_plugin/'
 # cloud range accordingly
 point_cloud_range = [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
 voxel_size = [0.2, 0.2, 8]
+
+# img_norm_cfg = dict(
+#     mean=[103.530, 116.280, 123.675], std=[1.0, 1.0, 1.0], to_rgb=False)
+# For vovnet
 img_norm_cfg = dict(
     mean=[103.530, 116.280, 123.675], std=[57.375, 57.120, 58.395], to_rgb=False)
 # For nuScenes we usually do 10-class detection
@@ -222,16 +225,17 @@ db_sampler = dict(
         load_dim=5,
         use_dim=[0, 1, 2, 3, 4],
         file_client_args=file_client_args))
+
 ida_aug_conf = {
-    "resize_lim": (0.94, 1.25),
-    "final_dim": (640, 1600),
+    "resize_lim": (0.8, 1.0),
+    "final_dim": (512, 1408),
     "bot_pct_lim": (0.0, 0.0),
     "rot_lim": (0.0, 0.0),
     "H": 900,
     "W": 1600,
-    # "rand_flip": False,
     "rand_flip": True,
 }
+
 train_pipeline = [
     dict(type='LoadMultiViewImageFromFiles', to_float32=True),
     dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True, with_attr_label=False),
@@ -255,9 +259,9 @@ train_pipeline = [
 test_pipeline = [
     dict(type='LoadMultiViewImageFromFiles', to_float32=True),
 
-    dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True, with_attr_label=False),
-    dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
-    dict(type='ObjectNameFilter', classes=class_names),
+    # dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True, with_attr_label=False),
+    # dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
+    # dict(type='ObjectNameFilter', classes=class_names),
 
     dict(type='ResizeCropFlipImage', data_aug_conf=ida_aug_conf, training=False),
 
@@ -273,11 +277,11 @@ test_pipeline = [
                 type='DefaultFormatBundle3D',
                 class_names=class_names,
                 with_label=False),
-            dict(
-                type='Collect3D',
-                keys=['gt_bboxes_3d', 'gt_labels_3d', 'img'],
-            ),
-            # dict(type='Collect3D', keys=['img'])
+            # dict(
+            #     type='Collect3D',
+            #     keys=['gt_bboxes_3d', 'gt_labels_3d', 'img'],
+            # ),
+            dict(type='Collect3D', keys=['img'])
         ])
 ]
 
@@ -312,6 +316,7 @@ data = dict(
         modality=input_modality
     )
 )
+
 optimizer = dict(
     type='AdamW',
     lr=2e-4,
@@ -319,8 +324,7 @@ optimizer = dict(
         custom_keys={
             'img_backbone': dict(lr_mult=0.1),
         }),
-    weight_decay=0.01
-)
+    weight_decay=0.01)
 
 optimizer_config = dict(type='Fp16OptimizerHook', loss_scale=512., grad_clip=dict(max_norm=35, norm_type=2))
 
@@ -340,5 +344,7 @@ find_unused_parameters = False
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
 load_from = 'ckpts/fcos3d_vovnet_imgbackbone-remapped.pth'
 resume_from = None
-# model_size: 19G
-# 4 gpus bs=2 in server
+# model_size: 14G
+# 8 gpus bs=1 in TWCC
+# model_size: 24G
+# 4 gpus bs-2 in server

@@ -355,3 +355,17 @@ resume_from = None
 # 8 gpus bs=1 in TWCC
 # model_size: 22G
 # 4 gpus bs=2 in server
+# mAP: 0.3668
+# mATE: 0.7674
+# mASE: 0.2673
+# mAOE: 0.4484
+# mAVE: 0.8643
+# mAAE: 0.2142
+# NDS: 0.4272                                                                                                                                                                                                Eval time: 116.8s
+# Per-class results:
+# Object Class    AP      ATE     ASE     AOE     AVE     AAE                                                                                                                                                car     0.556   0.555   0.148   0.086   0.918   0.216                                                                                                                                                      truck   0.322   0.794   0.217   0.111   0.888   0.226
+# bus     0.409   0.816   0.195   0.142   2.032   0.370
+# trailer 0.164   1.066   0.233   0.564   0.575   0.154                                                                                                                                                      construction_vehicle    0.097   1.093   0.469   1.071   0.111   0.352                                                                                                                                      pedestrian      0.443   0.698   0.294   0.557   0.485   0.214
+# motorcycle      0.351   0.733   0.252   0.615   1.424   0.166
+# bicycle 0.326   0.673   0.261   0.729   0.483   0.016                                                                                                                                                      traffic_cone    0.541   0.568   0.319   nan     nan     nan                                                                                                                                                barrier 0.460   0.679   0.284   0.159   nan     nan
+# 2022-09-05 10: 50: 10, 519 - mmdet - INFO - Exp name: depthr_r101cn_p4_512_1408_depth32_ddn16_w0_lid64_start1e-3_en3_de3_view_dsv_bs2.py

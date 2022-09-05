@@ -262,17 +262,6 @@ train_pipeline = [
     dict(type='Collect3D', keys=['gt_bboxes_3d', 'gt_labels_3d', 'img'])
 ]
 test_pipeline = [
-    # dict(
-    #     type='LoadPointsFromFile',
-    #     coord_type='LIDAR',
-    #     load_dim=5,
-    #     use_dim=5,
-    #     file_client_args=file_client_args),
-    # dict(
-    #     type='LoadPointsFromMultiSweeps',
-    #     sweeps_num=10,
-    #     file_client_args=file_client_args),
-
     dict(type='LoadMultiViewImageFromFiles', to_float32=True),
 
     # dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True, with_attr_label=False),

@@ -1,4 +1,3 @@
-
 _base_ = [
     '../../../mmdetection3d/configs/_base_/datasets/nus-3d.py',
     '../../../mmdetection3d/configs/_base_/default_runtime.py'
@@ -11,8 +10,9 @@ plugin_dir = 'projects/mmdet3d_plugin/'
 # cloud range accordingly
 point_cloud_range = [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
 voxel_size = [0.2, 0.2, 8]
+
 img_norm_cfg = dict(
-    mean=[103.530, 116.280, 123.675], std=[57.375, 57.120, 58.395], to_rgb=False)
+    mean=[103.530, 116.280, 123.675], std=[1.0, 1.0, 1.0], to_rgb=False)
 # For nuScenes we usually do 10-class detection
 class_names = [
     'car', 'truck', 'construction_vehicle', 'bus', 'trailer', 'barrier',
@@ -38,17 +38,25 @@ model = dict(
     type='Depthr3D',
     use_grid_mask=True,
     img_backbone=dict(
-        type='VoVNetCP',
-        spec_name='V-99-eSE',
+        type='ResNet',
+        depth=101,
+        num_stages=4,
+        out_indices=(2, 3,),
+        frozen_stages=1,
+        norm_cfg=dict(type='BN2d', requires_grad=False),
         norm_eval=True,
-        frozen_stages=-1,
-        input_ch=3,
-        out_features=('stage4', 'stage5',)),
+        style='caffe',
+        with_cp=True,
+        dcn=dict(type='DCNv2', deform_groups=1, fallback_on_stride=False),
+        stage_with_dcn=(False, False, True, True),
+        # pretrained='ckpts/resnet50_msra-5891d200.pth',
+    ),
     img_neck=dict(
         type='CPFPN',
-        in_channels=[768, 1024],
+        in_channels=[1024, 2048],
         out_channels=head_in_channels,
-        num_outs=2),
+        num_outs=2,
+    ),
     pts_bbox_head=dict(
         type='DepthrHead',
         num_classes=10,
@@ -222,6 +230,16 @@ db_sampler = dict(
         load_dim=5,
         use_dim=[0, 1, 2, 3, 4],
         file_client_args=file_client_args))
+
+# ida_aug_conf = {
+#     "resize_lim": (0.8, 1.0),
+#     "final_dim": (512, 1408),
+#     "bot_pct_lim": (0.0, 0.0),
+#     "rot_lim": (0.0, 0.0),
+#     "H": 900,
+#     "W": 1600,
+#     "rand_flip": True,
+# }
 ida_aug_conf = {
     "resize_lim": (0.94, 1.25),
     "final_dim": (640, 1600),
@@ -255,9 +273,9 @@ train_pipeline = [
 test_pipeline = [
     dict(type='LoadMultiViewImageFromFiles', to_float32=True),
 
-    dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True, with_attr_label=False),
-    dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
-    dict(type='ObjectNameFilter', classes=class_names),
+    # dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True, with_attr_label=False),
+    # dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
+    # dict(type='ObjectNameFilter', classes=class_names),
 
     dict(type='ResizeCropFlipImage', data_aug_conf=ida_aug_conf, training=False),
 
@@ -273,45 +291,78 @@ test_pipeline = [
                 type='DefaultFormatBundle3D',
                 class_names=class_names,
                 with_label=False),
-            dict(
-                type='Collect3D',
-                keys=['gt_bboxes_3d', 'gt_labels_3d', 'img'],
-            ),
-            # dict(type='Collect3D', keys=['img'])
+            # dict(
+            #     type='Collect3D',
+            #     keys=['gt_bboxes_3d', 'gt_labels_3d', 'img'],
+            # ),
+            dict(type='Collect3D', keys=['img'])
         ])
 ]
 
-data_length = 60000
+# data_length = 60000
+# data = dict(
+#     samples_per_gpu=2,
+#     workers_per_gpu=4,
+#     train=dict(
+#         type=dataset_type,
+#         data_root=data_root,
+#         ann_file=data_root + 'nuscenes_infos_train.pkl',
+#         pipeline=train_pipeline,
+#         classes=class_names,
+#         modality=input_modality,
+#         test_mode=False,
+#         use_valid_flag=True,
+#         # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
+#         # and box_type_3d='Depth' in sunrgbd and scannet dataset.
+#         box_type_3d='LiDAR',
+#         data_length=data_length,
+#     ),
+#     val=dict(
+#         type=dataset_type,
+#         pipeline=test_pipeline,
+#         classes=class_names,
+#         modality=input_modality
+#     ),
+#     test=dict(
+#         type=dataset_type,
+#         pipeline=test_pipeline,
+#         classes=class_names,
+#         modality=input_modality
+#     )
+# )
+
 data = dict(
     samples_per_gpu=1,
     workers_per_gpu=4,
     train=dict(
-        type=dataset_type,
-        data_root=data_root,
-        ann_file=data_root + 'nuscenes_infos_train.pkl',
-        pipeline=train_pipeline,
-        classes=class_names,
-        modality=input_modality,
-        test_mode=False,
-        use_valid_flag=True,
-        # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
-        # and box_type_3d='Depth' in sunrgbd and scannet dataset.
-        box_type_3d='LiDAR',
-        data_length=data_length,
+        type='CBGSDataset',
+        dataset=dict(
+            type=dataset_type,
+            data_root=data_root,
+            ann_file=data_root + 'nuscenes_infos_train.pkl',
+            pipeline=train_pipeline,
+            classes=class_names,
+            modality=input_modality,
+            test_mode=False,
+            use_valid_flag=True,
+            # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
+            # and box_type_3d='Depth' in sunrgbd and scannet dataset.
+            box_type_3d='LiDAR'),
     ),
     val=dict(
         type=dataset_type,
         pipeline=test_pipeline,
         classes=class_names,
-        modality=input_modality
+        modality=input_modality,
     ),
     test=dict(
         type=dataset_type,
         pipeline=test_pipeline,
         classes=class_names,
-        modality=input_modality
+        modality=input_modality,
     )
 )
+
 optimizer = dict(
     type='AdamW',
     lr=2e-4,
@@ -319,8 +370,7 @@ optimizer = dict(
         custom_keys={
             'img_backbone': dict(lr_mult=0.1),
         }),
-    weight_decay=0.01
-)
+    weight_decay=0.01)
 
 optimizer_config = dict(type='Fp16OptimizerHook', loss_scale=512., grad_clip=dict(max_norm=35, norm_type=2))
 
@@ -333,12 +383,16 @@ lr_config = dict(
     min_lr_ratio=1e-3,
     # by_epoch=False
 )
-total_epochs = 24
+total_epochs = 28
 evaluation = dict(interval=1, pipeline=test_pipeline)
 find_unused_parameters = False
 
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
-load_from = 'ckpts/fcos3d_vovnet_imgbackbone-remapped.pth'
+# load_from = None
+load_from = 'ckpts/fcos3d.pth'
 resume_from = None
-# model_size: 19G
+
+# model_size: G
+# 8 gpus bs=1 in TWCC
+# model_size: 22G/ 18G
 # 4 gpus bs=2 in server
