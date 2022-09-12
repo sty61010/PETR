@@ -264,9 +264,9 @@ train_pipeline = [
 test_pipeline = [
     dict(type='LoadMultiViewImageFromFiles', to_float32=True),
 
-    dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True, with_attr_label=False),
-    dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
-    dict(type='ObjectNameFilter', classes=class_names),
+    # dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True, with_attr_label=False),
+    # dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
+    # dict(type='ObjectNameFilter', classes=class_names),
 
     dict(type='ResizeCropFlipImage', data_aug_conf=ida_aug_conf, training=False),
 
@@ -282,11 +282,11 @@ test_pipeline = [
                 type='DefaultFormatBundle3D',
                 class_names=class_names,
                 with_label=False),
-            dict(
-                type='Collect3D',
-                keys=['gt_bboxes_3d', 'gt_labels_3d', 'img'],
-            ),
-            # dict(type='Collect3D', keys=['img'])
+            # dict(
+            #     type='Collect3D',
+            #     keys=['gt_bboxes_3d', 'gt_labels_3d', 'img'],
+            # ),
+            dict(type='Collect3D', keys=['img'])
         ])
 ]
 
@@ -389,25 +389,25 @@ resume_from = None
 # 8 gpus bs=1 in TWCC
 # model_size: 22G
 # 4 gpus bs=2 in server
-# mAP: 0.3232
-# mATE: 0.7644
-# mASE: 0.2700
-# mAOE: 0.5629
-# mAVE: 0.8722
-# mAAE: 0.2097
-# NDS: 0.3937
-# Eval time: 190.4s
+# mAP: 0.3250
+# mATE: 0.7469
+# mASE: 0.2702
+# mAOE: 0.5642
+# mAVE: 0.8328
+# mAAE: 0.2111
+# NDS: 0.4000
+# Eval time: 186.3s
 
 # Per-class results:
 # Object Class    AP      ATE     ASE     AOE     AVE     AAE
-# car     0.517   0.587   0.151   0.103   0.974   0.214
-# truck   0.261   0.831   0.225   0.156   0.741   0.216
-# bus     0.333   0.822   0.207   0.160   2.042   0.343
-# trailer 0.129   1.049   0.252   0.603   0.504   0.127
-# construction_vehicle    0.060   0.984   0.448   1.099   0.135   0.348
-# pedestrian      0.386   0.720   0.302   1.041   0.796   0.245
-# motorcycle      0.296   0.763   0.263   0.813   1.319   0.170
-# bicycle 0.273   0.694   0.252   0.968   0.466   0.014
-# traffic_cone    0.506   0.576   0.319   nan     nan     nan
-# barrier 0.471   0.618   0.281   0.124   nan     nan
-# 2022-09-05 11: 12: 22, 661 - mmdet - INFO - Exp name: depthr_r50dcn_p4_512_1408_depth32_ddn16_w10_lid64_start1e-3_en3_de3_view_dsv_cbgs_bs2.py
+# car     0.528   0.556   0.150   0.097   0.952   0.209
+# truck   0.261   0.786   0.224   0.141   0.737   0.225
+# bus     0.335   0.780   0.207   0.172   1.915   0.336
+# trailer 0.131   1.054   0.251   0.553   0.392   0.109
+# construction_vehicle    0.058   1.030   0.446   1.097   0.119   0.361
+# pedestrian      0.380   0.710   0.303   1.017   0.786   0.245
+# motorcycle      0.300   0.724   0.267   0.851   1.311   0.192
+# bicycle 0.261   0.687   0.253   1.032   0.451   0.013
+# traffic_cone    0.520   0.543   0.319   nan     nan     nan
+# barrier 0.478   0.600   0.282   0.119   nan     nan
+# 2022-09-05 21: 16: 22, 373 - mmdet - INFO - Exp name: depthr_r50dcn_p4_512_1408_depth32_ddn16_w10_lid64_start1e-3_en3_de3_view_dsv_cbgs_bs2.py

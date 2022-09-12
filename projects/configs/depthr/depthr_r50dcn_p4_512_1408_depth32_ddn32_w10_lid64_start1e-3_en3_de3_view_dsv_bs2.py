@@ -27,7 +27,7 @@ input_modality = dict(
 )
 embed_dims = 256
 num_levels = 2
-depth_maps_down_scale = 16
+depth_maps_down_scale = 32
 depth_emb_down_scale = 32
 head_in_channels = 256
 depth_start = 1e-3
@@ -39,17 +39,17 @@ model = dict(
     use_grid_mask=True,
     img_backbone=dict(
         type='ResNet',
-        depth=101,
+        depth=50,
         num_stages=4,
         out_indices=(2, 3,),
-        frozen_stages=1,
+        frozen_stages=-1,
         norm_cfg=dict(type='BN2d', requires_grad=False),
         norm_eval=True,
         style='caffe',
         with_cp=True,
         dcn=dict(type='DCNv2', deform_groups=1, fallback_on_stride=False),
         stage_with_dcn=(False, False, True, True),
-        # pretrained='ckpts/resnet50_msra-5891d200.pth',
+        pretrained='ckpts/resnet50_msra-5891d200.pth',
     ),
     img_neck=dict(
         type='CPFPN',
@@ -347,33 +347,9 @@ evaluation = dict(interval=1, pipeline=test_pipeline)
 find_unused_parameters = False
 
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)
-# load_from = None
-load_from = 'ckpts/fcos3d.pth'
+load_from = None
 resume_from = None
-
 # model_size: G
 # 8 gpus bs=1 in TWCC
 # model_size: 22G
 # 4 gpus bs=2 in server
-# mAP: 0.3697
-# mATE: 0.7725
-# mASE: 0.2699
-# mAOE: 0.4828
-# mAVE: 0.8665
-# mAAE: 0.2035
-# NDS: 0.4253
-# Eval time: 197.7s
-
-# Per-class results:
-# Object Class    AP      ATE     ASE     AOE     AVE     AAE
-# car     0.555   0.549   0.151   0.088   0.941   0.223
-# truck   0.331   0.825   0.223   0.124   0.931   0.230
-# bus     0.408   0.848   0.207   0.166   2.117   0.344
-# trailer 0.160   1.121   0.248   0.651   0.523   0.078
-# construction_vehicle    0.083   1.040   0.475   1.102   0.105   0.368
-# pedestrian      0.447   0.693   0.289   0.573   0.495   0.210
-# motorcycle      0.368   0.714   0.251   0.602   1.311   0.164
-# bicycle 0.338   0.701   0.261   0.866   0.508   0.011
-# traffic_cone    0.528   0.566   0.312   nan     nan     nan
-# barrier 0.478   0.669   0.280   0.174   nan     nan
-# 2022-08-27 09: 49: 28, 385 - mmdet - INFO - Exp name: depthr_r101cn_p4_512_1408_depth32_ddn16_w10_lid64_start1e-3_en3_de3_view_dsv_bs2.py

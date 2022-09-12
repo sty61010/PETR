@@ -4,6 +4,10 @@ import json
 from visual_nuscenes import NuScenes
 use_gt = False
 model_name = 'depthr_r50dcn_c5_512_1408_gtdepth'
+# model_name = 'petr_r50dcn_gridmask_c5'
+# model_name = 'petr_vovnet_gridmask_p4_512_1408_bs2'
+
+
 out_dir = f'./result_vis/{model_name}/'
 result_json = f"./work_dirs/{model_name}/results_eval/pts_bbox/results_nusc"
 dataroot = '/mnt/ssd1/Datasets/nuscenes/v1.0-mini/'

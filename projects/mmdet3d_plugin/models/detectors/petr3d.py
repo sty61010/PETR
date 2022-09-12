@@ -24,6 +24,7 @@ from mmdet3d.core import bbox3d2result
 # )
 from mmdet3d.models.detectors.mvx_two_stage import MVXTwoStageDetector
 from projects.mmdet3d_plugin.models.utils.grid_mask import GridMask
+import numpy as np
 
 
 @DETECTORS.register_module()
@@ -189,7 +190,7 @@ class Petr3D(MVXTwoStageDetector):
                                             gt_bboxes_ignore)
         losses.update(losses_pts)
         return losses
-  
+
     def forward_test(self, img_metas, img=None, **kwargs):
         for var, name in [(img_metas, 'img_metas')]:
             if not isinstance(var, list):
@@ -208,7 +209,7 @@ class Petr3D(MVXTwoStageDetector):
             for bboxes, scores, labels in bbox_list
         ]
         return bbox_results
-    
+
     def simple_test(self, img_metas, img=None, rescale=False):
         """Test function without augmentaiton."""
         img_feats = self.extract_feat(img=img, img_metas=img_metas)
@@ -245,4 +246,59 @@ class Petr3D(MVXTwoStageDetector):
         for result_dict, pts_bbox in zip(bbox_list, bbox_pts):
             result_dict['pts_bbox'] = pts_bbox
         return bbox_list
-    
+
+    def forward_dummy(self, points=None, img_metas=None, img_inputs=None, **kwargs):
+        from mmdet3d.core.bbox.structures.box_3d_mode import LiDARInstance3DBoxes
+        # pad_shape = input_shape + (3,)
+        lidar2img = np.array([
+            [[[667.5999, -11.3459, -1.8519, -891.7272],
+              [38.3278, 67.5572, -559.0681, 760.1029],
+              [0.5589, 0.8291, 0.0114, -1.1843],
+              [0.5589, 0.8291, 0.0114, -1.1843]],
+
+             [[412.9886, 506.6375, 1.8396, -668.0064],
+              [-20.6782, 71.7123, -553.2657, 870.4648],
+              [-0.3188, 0.9478, -0.0041, -0.1035],
+              [0.5589, 0.8291, 0.0114, -1.1843]],
+
+             [[-365.1992, 355.5753, 9.6372, -12.7062],
+                [-78.5942, 2.7520, -354.6458, 559.4022],
+                [-0.9998, -0.0013, 0.0186, -0.0372],
+                [0.5589, 0.8291, 0.0114, -1.1843]],
+
+             [[-643.1426, -139.6496, -12.1919, 556.9597],
+              [-20.3761, -62.4205, -556.1431, 853.0998],
+              [-0.3483, -0.9370, -0.0269, -0.0905],
+              [0.5589, 0.8291, 0.0114, -1.1843]],
+
+             [[-259.5370, -605.4091, -16.6692, 100.7252],
+              [42.5486, -48.6904, -556.4778, 741.4697],
+              [0.5614, -0.8272, -0.0248, -1.1877],
+              [0.5589, 0.8291, 0.0114, -1.1843]],
+
+             [[369.1537, -550.5783, -9.0176, -553.2021],
+              [71.9614, 7.6353, -557.7432, 728.3124],
+              [0.9998, 0.0181, -0.0075, -1.5520],
+              [0.5589, 0.8291, 0.0114, -1.1843]]],
+        ])
+        img_shape = [[512, 1408, 3] for i in range(6)]
+
+        # img_metas = [dict(box_type_3d=LiDARInstance3DBoxes, pad_shape=[[512, 1408, 3]], img_shape=[
+        #                   [512, 1408, 3], [512, 1408, 3], [512, 1408, 3], [512, 1408, 3], [512, 1408, 3], [512, 1408, 3]])]
+
+        img_metas = [
+            dict(box_type_3d=LiDARInstance3DBoxes,
+                 lidar2img=l2i,
+                 pad_shape=img_shape,
+                 img_shape=img_shape,
+                 ) for l2i in lidar2img]
+
+        img_feats = self.extract_feat(img=img_inputs, img_metas=img_metas)
+
+        bbox_list = [dict() for _ in range(1)]
+        assert self.with_pts_bbox
+        bbox_pts = self.simple_test_pts(
+            img_feats, img_metas, rescale=False)
+        for result_dict, pts_bbox in zip(bbox_list, bbox_pts):
+            result_dict['pts_bbox'] = pts_bbox
+        return bbox_list

@@ -1471,6 +1471,11 @@ class NuScenesExplorer:
             if with_anns:
                 for box in boxes:
                     c = np.array(self.get_color(box.name)) / 255.0
+                    # c = np.array((242, 10, 0)) / 255.0
+                    # c = np.array((124, 252, 0)) / 255.0
+                    c = np.array((0, 0, 255)) / 255.0
+
+                    # print(f'c: {c}')
                     box.render(ax, view=np.eye(4), colors=(c, c, c))
 
             # Limit visible range.
@@ -1493,6 +1498,12 @@ class NuScenesExplorer:
             if with_anns:
                 for box in boxes:
                     c = np.array(self.get_color(box.name)) / 255.0
+                    # c = np.array((242, 10, 0)) / 255.0
+                    # c = np.array((124, 252, 0)) / 255.0
+                    c = np.array((0, 0, 255)) / 255.0
+
+                    # print(f'c: {c}')
+                    # box.render(ax, view=camera_intrinsic, normalize=True, colors=(0, 1.0, 0))
                     box.render(ax, view=camera_intrinsic, normalize=True, colors=(c, c, c))
 
             # Limit visible range.
