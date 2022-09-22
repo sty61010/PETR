@@ -3,9 +3,10 @@ import tqdm
 import json
 from visual_nuscenes import NuScenes
 use_gt = False
-model_name = 'depthr_r50dcn_c5_512_1408_gtdepth'
+# model_name = 'depthr_r50dcn_c5_512_1408_gtdepth'
 # model_name = 'petr_r50dcn_gridmask_c5'
 # model_name = 'petr_vovnet_gridmask_p4_512_1408_bs2'
+model_name = 'depthr_r101cn_p4_512_1408_depth32_ddn16_w10_lid64_start1e-3_en3_de3_view_dsv_bs2'
 
 
 out_dir = f'./result_vis/{model_name}/'

@@ -1068,8 +1068,8 @@ class NuScenesExplorer:
                 fig.canvas.set_window_title(sample_token + '(predictions)')
             else:
                 fig.canvas.set_window_title(sample_token)
-        else:  # Set title on if rendering as part of render_sample.
-            ax.set_title(camera_channel)
+        # else:  # Set title on if rendering as part of render_sample.
+        #     ax.set_title(camera_channel)
         ax.imshow(im)
         ax.scatter(points[0, :], points[1, :], c=coloring, s=dot_size)
         ax.axis('off')
@@ -1473,7 +1473,9 @@ class NuScenesExplorer:
                     c = np.array(self.get_color(box.name)) / 255.0
                     # c = np.array((242, 10, 0)) / 255.0
                     # c = np.array((124, 252, 0)) / 255.0
-                    c = np.array((0, 0, 255)) / 255.0
+                    # c = np.array((0, 0, 255)) / 255.0
+                    # c = np.array((255, 127, 0)) / 255.0
+                    c = np.array((0, 255, 0)) / 255.0
 
                     # print(f'c: {c}')
                     box.render(ax, view=np.eye(4), colors=(c, c, c))
@@ -1500,7 +1502,9 @@ class NuScenesExplorer:
                     c = np.array(self.get_color(box.name)) / 255.0
                     # c = np.array((242, 10, 0)) / 255.0
                     # c = np.array((124, 252, 0)) / 255.0
-                    c = np.array((0, 0, 255)) / 255.0
+                    # c = np.array((0, 0, 255)) / 255.0
+                    # c = np.array((255, 127, 0)) / 255.0
+                    c = np.array((0, 255, 0)) / 255.0
 
                     # print(f'c: {c}')
                     # box.render(ax, view=camera_intrinsic, normalize=True, colors=(0, 1.0, 0))
@@ -1514,8 +1518,8 @@ class NuScenesExplorer:
             raise ValueError("Error: Unknown sensor modality!")
 
         ax.axis('off')
-        ax.set_title('{} {labels_type}'.format(
-            sd_record['channel'], labels_type='(predictions)' if lidarseg_preds_bin_path else ''))
+        # ax.set_title('{} {labels_type}'.format(
+        #     sd_record['channel'], labels_type='(predictions)' if lidarseg_preds_bin_path else ''))
         ax.set_aspect('equal')
 
         if out_path is not None:

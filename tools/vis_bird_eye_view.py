@@ -6,13 +6,14 @@ import json
 from visual_nuscenes import NuScenes
 
 use_gt = False
-# model_name = 'depthr_r50dcn_c5_512_1408_gtdepth'
+model_name = 'depthr_r50dcn_c5_512_1408_gtdepth'
 # model_name = 'petr_r50dcn_gridmask_c5'
-model_name = 'petr_vovnet_gridmask_p4_512_1408_bs2'
+# model_name = 'petr_vovnet_gridmask_p4_512_1408_bs2'
 
 # dir_name = 'ours'
 # dir_name = 'baseline'
-dir_name = 'baseline_pretrained'
+# dir_name = 'baseline_pretrained'
+dir_name = 'demo_video'
 
 
 # out_dir = f'./result_vis/{model_name}/'
@@ -24,7 +25,8 @@ version = 'mini'
 
 first_sample_token = '747aa46b9a4641fe90db05d97db2acea'
 # first_sample_token = '3e8750f331d7499e9b5123e9eb70f2e2'
-
+['3e8750f331d7499e9b5123e9eb70f2e2', '3950bd41f74548429c0f7700ff3d8269', 'c5f58c19249d4137ae063b0e9ecd8b8e', '700c1a25559b4433be532de3475e58a9', '747aa46b9a4641fe90db05d97db2acea',
+    'f4f86af4da3b49e79497deda5c5f223a', '6832e717621341568c759151b5974512', 'c59e60042a8643e899008da2e446acca', 'fa65a298c01f44e7a182bbf9e5fe3697', 'a98fba72bde9433fb882032d18aedb2e', 'b6b0d9f2f2e14a3aaa2c8aedeb1edb69', '796b1988dd254f74bf2fb19ba9c5b8c6', '0d0700a2284e477db876c3ee1d864668']
 # nusc = NuScenes(version='v1.0-mini', dataroot='/mnt/ssd1/Datasets/nuscenes/v1.0-mini', verbose=True)
 if not os.path.exists(out_dir):
     os.mkdir(out_dir)
