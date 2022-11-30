@@ -25,6 +25,7 @@ except ImportError:
     Compose = None
 from PIL import Image
 
+
 @PIPELINES.register_module()
 class PadMultiViewImage(object):
     """Pad the multi-view image.
@@ -111,6 +112,7 @@ class NormalizeMultiviewImage(object):
         repr_str = self.__class__.__name__
         repr_str += f'(mean={self.mean}, std={self.std}, to_rgb={self.to_rgb})'
         return repr_str
+
 
 @PIPELINES.register_module()
 class ResizeMultiview3D:
@@ -274,7 +276,7 @@ class ResizeMultiview3D:
             scale, scale_idx = self.random_select(self.img_scale)
         else:
             raise NotImplementedError
-        
+
         results['scale'] = scale
         results['scale_idx'] = scale_idx
 
@@ -306,13 +308,13 @@ class ResizeMultiview3D:
                     backend=self.backend)
             results['img'][i] = img
             scale_factor = np.array([w_scale, h_scale, w_scale, h_scale],
-                                dtype=np.float32)
+                                    dtype=np.float32)
             img_shapes.append(img.shape)
             pad_shapes.append(img.shape)
             scale_factors.append(scale_factor)
             keep_ratios.append(self.keep_ratio)
-            #rescale the camera intrinsic
-            results['intrinsics'][i][0, 0] *= w_scale 
+            # rescale the camera intrinsic
+            results['intrinsics'][i][0, 0] *= w_scale
             results['intrinsics'][i][0, 2] *= w_scale
             results['intrinsics'][i][1, 1] *= h_scale
             results['intrinsics'][i][1, 2] *= h_scale
@@ -320,9 +322,9 @@ class ResizeMultiview3D:
         results['pad_shape'] = pad_shapes
         results['scale_factor'] = scale_factors
         results['keep_ratio'] = keep_ratios
-        
-        results['lidar2img'] = [results['intrinsics'][i] @ results['extrinsics'][i].T for i in range(len(results['extrinsics']))]
 
+        results['lidar2img'] = [results['intrinsics'][i] @ results['extrinsics']
+                                [i].T for i in range(len(results['extrinsics']))]
 
     def __call__(self, results):
         """Call function to resize images, bounding boxes, masks, semantic
@@ -398,7 +400,8 @@ class ResizeCropFlipImage(object):
             results['intrinsics'][i][:3, :3] = ida_mat @ results['intrinsics'][i][:3, :3]
 
         results["img"] = new_imgs
-        results['lidar2img'] = [results['intrinsics'][i] @ results['extrinsics'][i].T for i in range(len(results['extrinsics']))]
+        results['lidar2img'] = [results['intrinsics'][i] @ results['extrinsics']
+                                [i].T for i in range(len(results['extrinsics']))]
 
         return results
 
@@ -466,6 +469,151 @@ class ResizeCropFlipImage(object):
 
 
 @PIPELINES.register_module()
+class MSResizeCropFlipImage(object):
+    """Random resize, Crop and flip the image
+    Args:
+        size (tuple, optional): Fixed padding size.
+    """
+
+    def __init__(self, data_aug_conf=None, training=True, view_num=1, center_size=2.0):
+        self.data_aug_conf = data_aug_conf
+        self.training = training
+        self.view_num = view_num
+        self.center_size = center_size
+
+    def __call__(self, results):
+        """Call function to pad images, masks, semantic segmentation maps.
+        Args:
+            results (dict): Result dict from loading pipeline.
+        Returns:
+            dict: Updated result dict.
+        """
+
+        imgs = results["img"]
+        N = len(imgs)
+        new_imgs = []
+        resize, resize_dims, crop, flip, rotate = self._sample_augmentation()
+
+        copy_intrinsics = []
+        copy_extrinsics = []
+        for i in range(self.view_num):
+            copy_intrinsics.append(np.copy(results['intrinsics'][i]))
+            copy_extrinsics.append(np.copy(results['extrinsics'][i]))
+
+        for i in range(N):
+            img = Image.fromarray(np.uint8(imgs[i]))
+            # augmentation (resize, crop, horizontal flip, rotate)
+            img, ida_mat = self._img_transform(
+                img,
+                resize=resize,
+                resize_dims=resize_dims,
+                crop=crop,
+                flip=flip,
+                rotate=rotate,
+            )
+            new_imgs.append(np.array(img).astype(np.float32))
+            results['intrinsics'][i][:3, :3] = ida_mat @ results['intrinsics'][i][:3, :3]
+
+        resize, resize_dims, crop, flip, rotate = self._crop_augmentation(resize)
+        for i in range(self.view_num):
+            img = Image.fromarray(np.copy(np.uint8(imgs[i])))
+            img, ida_mat = self._img_transform(
+                img,
+                resize=resize,
+                resize_dims=resize_dims,
+                crop=crop,
+                flip=flip,
+                rotate=rotate,
+            )
+            new_imgs.append(np.array(img).astype(np.float32))
+            copy_intrinsics[i][:3, :3] = ida_mat @ copy_intrinsics[i][:3, :3]
+            results['intrinsics'].append(copy_intrinsics[i])
+            results['extrinsics'].append(copy_extrinsics[i])
+            results['filename'].append(results['filename'][i].replace(".jpg", "_crop.jpg"))
+            results['timestamp'].append(results['timestamp'][i])
+
+        results["img"] = new_imgs
+        results['lidar2img'] = [results['intrinsics'][i] @ results['extrinsics']
+                                [i].T for i in range(len(results['extrinsics']))]
+        return results
+
+    def _get_rot(self, h):
+
+        return torch.Tensor(
+            [
+                [np.cos(h), np.sin(h)],
+                [-np.sin(h), np.cos(h)],
+            ]
+        )
+
+    def _img_transform(self, img, resize, resize_dims, crop, flip, rotate):
+        ida_rot = torch.eye(2)
+        ida_tran = torch.zeros(2)
+        # adjust image
+        img = img.resize(resize_dims)
+        img = img.crop(crop)
+        if flip:
+            img = img.transpose(method=Image.FLIP_LEFT_RIGHT)
+        img = img.rotate(rotate)
+
+        # post-homography transformation
+        ida_rot *= resize
+        ida_tran -= torch.Tensor(crop[:2])
+        if flip:
+            A = torch.Tensor([[-1, 0], [0, 1]])
+            b = torch.Tensor([crop[2] - crop[0], 0])
+            ida_rot = A.matmul(ida_rot)
+            ida_tran = A.matmul(ida_tran) + b
+        A = self._get_rot(rotate / 180 * np.pi)
+        b = torch.Tensor([crop[2] - crop[0], crop[3] - crop[1]]) / 2
+        b = A.matmul(-b) + b
+        ida_rot = A.matmul(ida_rot)
+        ida_tran = A.matmul(ida_tran) + b
+        ida_mat = torch.eye(3)
+        ida_mat[:2, :2] = ida_rot
+        ida_mat[:2, 2] = ida_tran
+        return img, ida_mat
+
+    def _sample_augmentation(self):
+        H, W = self.data_aug_conf["H"], self.data_aug_conf["W"]
+        fH, fW = self.data_aug_conf["final_dim"]
+        if self.training:
+            resize = np.random.uniform(*self.data_aug_conf["resize_lim"])
+            resize_dims = (int(W * resize), int(H * resize))
+            newW, newH = resize_dims
+            crop_h = int((1 - np.random.uniform(*self.data_aug_conf["bot_pct_lim"])) * newH) - fH
+            crop_w = int(np.random.uniform(0, max(0, newW - fW)))
+            crop = (crop_w, crop_h, crop_w + fW, crop_h + fH)
+            flip = False
+            if self.data_aug_conf["rand_flip"] and np.random.choice([0, 1]):
+                flip = True
+            rotate = np.random.uniform(*self.data_aug_conf["rot_lim"])
+        else:
+            resize = max(fH / H, fW / W)
+            resize_dims = (int(W * resize), int(H * resize))
+            newW, newH = resize_dims
+            crop_h = int((1 - np.mean(self.data_aug_conf["bot_pct_lim"])) * newH) - fH
+            crop_w = int(max(0, newW - fW) / 2)
+            crop = (crop_w, crop_h, crop_w + fW, crop_h + fH)
+            flip = False
+            rotate = 0
+        return resize, resize_dims, crop, flip, rotate
+
+    def _crop_augmentation(self, resize):
+        H, W = self.data_aug_conf["H"], self.data_aug_conf["W"]
+        fH, fW = self.data_aug_conf["final_dim"]
+        resize = self.center_size * resize
+        resize_dims = (int(W * resize), int(H * resize))
+        newW, newH = resize_dims
+        crop_h = int(max(0, newH - fH)/2)
+        crop_w = int(max(0, newW - fW)/2)
+        crop = (crop_w, crop_h, crop_w + fW, crop_h + fH)
+        flip = False
+        rotate = 0
+        return resize, resize_dims, crop, flip, rotate
+
+
+@PIPELINES.register_module()
 class GlobalRotScaleTransImage(object):
     """Random resize, Crop and flip the image
     Args:
@@ -503,7 +651,7 @@ class GlobalRotScaleTransImage(object):
             rot_angle *= -1
         results["gt_bboxes_3d"].rotate(
             np.array(rot_angle)
-        )  
+        )
 
         # random scale
         scale_ratio = np.random.uniform(*self.scale_ratio_range)
@@ -524,7 +672,7 @@ class GlobalRotScaleTransImage(object):
         num_view = len(results["lidar2img"])
         for view in range(num_view):
             results["lidar2img"][view] = (torch.tensor(results["lidar2img"][view]).float() @ rot_mat_inv).numpy()
-            # results["extrinsics"][view] = (torch.tensor(results["extrinsics"][view]).float() @ rot_mat_inv).numpy()
+            results["extrinsics"][view] = (torch.tensor(results["extrinsics"][view]).float() @ rot_mat_inv).numpy()
 
         return
 
@@ -543,9 +691,10 @@ class GlobalRotScaleTransImage(object):
         num_view = len(results["lidar2img"])
         for view in range(num_view):
             results["lidar2img"][view] = (torch.tensor(results["lidar2img"][view]).float() @ rot_mat_inv).numpy()
-            # results["extrinsics"][view] = (torch.tensor(results["extrinsics"][view]).float() @ rot_mat_inv).numpy()
+            results["extrinsics"][view] = (torch.tensor(results["extrinsics"][view]).float() @ rot_mat_inv).numpy()
 
         return
+
 
 @PIPELINES.register_module()
 class AlbuMultiview3D:
@@ -681,6 +830,7 @@ class AlbuMultiview3D:
         repr_str = self.__class__.__name__ + f'(transforms={self.transforms})'
         return repr_str
 
+
 @PIPELINES.register_module()
 class PhotoMetricDistortionMultiViewImage:
     """Apply photometric distortion to image sequentially, every transformation
@@ -727,7 +877,7 @@ class PhotoMetricDistortionMultiViewImage:
             # random brightness
             if np.random.randint(2):
                 delta = np.random.uniform(-self.brightness_delta,
-                                    self.brightness_delta)
+                                          self.brightness_delta)
                 img += delta
 
             # mode == 0 --> do random contrast first
@@ -736,7 +886,7 @@ class PhotoMetricDistortionMultiViewImage:
             if mode == 1:
                 if np.random.randint(2):
                     alpha = np.random.uniform(self.contrast_lower,
-                                        self.contrast_upper)
+                                              self.contrast_upper)
                     img *= alpha
 
             # convert color from BGR to HSV
@@ -745,7 +895,7 @@ class PhotoMetricDistortionMultiViewImage:
             # random saturation
             if np.random.randint(2):
                 img[..., 1] *= np.random.uniform(self.saturation_lower,
-                                            self.saturation_upper)
+                                                 self.saturation_upper)
 
             # random hue
             if np.random.randint(2):
@@ -760,7 +910,7 @@ class PhotoMetricDistortionMultiViewImage:
             if mode == 0:
                 if np.random.randint(2):
                     alpha = np.random.uniform(self.contrast_lower,
-                                        self.contrast_upper)
+                                              self.contrast_upper)
                     img *= alpha
 
             # randomly swap channels
@@ -779,4 +929,3 @@ class PhotoMetricDistortionMultiViewImage:
         repr_str += f'{(self.saturation_lower, self.saturation_upper)},\n'
         repr_str += f'hue_delta={self.hue_delta})'
         return repr_str
-

@@ -14,9 +14,10 @@ from .transform_3d import (
     ResizeMultiview3D,
     AlbuMultiview3D,
     ResizeCropFlipImage,
-    GlobalRotScaleTransImage
+    GlobalRotScaleTransImage,
+    MSResizeCropFlipImage,
 )
-from .loading import LoadMultiViewImageFromMultiSweepsFiles
+from .loading import LoadMultiViewImageFromMultiSweepsFiles, LoadMapsFromFiles
 __all__ = [
     'PadMultiViewImage',
     'NormalizeMultiviewImage',
@@ -25,5 +26,7 @@ __all__ = [
     'ResizeMultiview3D',
     'AlbuMultiview3D',
     'ResizeCropFlipImage',
-    'GlobalRotScaleTransImage'
+    'GlobalRotScaleTransImage',
+    'LoadMapsFromFiles',
+    'MSResizeCropFlipImage',
 ]

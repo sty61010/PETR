@@ -4,6 +4,27 @@
 import mmcv
 import numpy as np
 from mmdet.datasets.builder import PIPELINES
+from einops import rearrange
+
+
+@PIPELINES.register_module()
+class LoadMapsFromFiles(object):
+    def __init__(self, k=None):
+        self.k = k
+
+    def __call__(self, results):
+        map_filename = results['map_filename']
+        maps = np.load(map_filename)
+        map_mask = maps['arr_0'].astype(np.float32)
+
+        maps = map_mask.transpose((2, 0, 1))
+        results['gt_map'] = maps
+        maps = rearrange(maps, 'c (h h1) (w w2) -> (h w) c h1 w2 ', h1=16, w2=16)
+        maps = maps.reshape(256, 3*256)
+        results['map_shape'] = maps.shape
+        results['maps'] = maps
+        return results
+
 
 @PIPELINES.register_module()
 class LoadMultiViewImageFromMultiSweepsFiles(object):
@@ -15,20 +36,21 @@ class LoadMultiViewImageFromMultiSweepsFiles(object):
         color_type (str): Color type of the file. Defaults to 'unchanged'.
     """
 
-    def __init__(self, 
-                sweeps_num=5,
-                to_float32=False, 
-                file_client_args=dict(backend='disk'),
-                pad_empty_sweeps=False,
-                sweep_range=[3,27],
-                sweeps_id = None,
-                color_type='unchanged',
-                sensors = ['CAM_FRONT', 'CAM_FRONT_RIGHT', 'CAM_FRONT_LEFT', 'CAM_BACK', 'CAM_BACK_LEFT', 'CAM_BACK_RIGHT'],
-                test_mode=True,
-                prob=1.0,
-                ):
+    def __init__(self,
+                 sweeps_num=5,
+                 to_float32=False,
+                 file_client_args=dict(backend='disk'),
+                 pad_empty_sweeps=False,
+                 sweep_range=[3, 27],
+                 sweeps_id=None,
+                 color_type='unchanged',
+                 sensors=['CAM_FRONT', 'CAM_FRONT_RIGHT', 'CAM_FRONT_LEFT',
+                          'CAM_BACK', 'CAM_BACK_LEFT', 'CAM_BACK_RIGHT'],
+                 test_mode=True,
+                 prob=1.0,
+                 ):
 
-        self.sweeps_num = sweeps_num    
+        self.sweeps_num = sweeps_num
         self.to_float32 = to_float32
         self.color_type = color_type
         self.file_client_args = file_client_args.copy()
@@ -57,6 +79,7 @@ class LoadMultiViewImageFromMultiSweepsFiles(object):
                 - scale_factor (float): Scale factor.
                 - img_norm_cfg (dict): Normalization configuration of images.
         """
+
         sweep_imgs_list = []
         timestamp_imgs_list = []
         imgs = results['img']
@@ -82,7 +105,7 @@ class LoadMultiViewImageFromMultiSweepsFiles(object):
             elif len(results['sweeps']) <= self.sweeps_num:
                 choices = np.arange(len(results['sweeps']))
             elif self.test_mode:
-                choices = [int((self.sweep_range[0] + self.sweep_range[1])/2) - 1] 
+                choices = [int((self.sweep_range[0] + self.sweep_range[1])/2) - 1]
             else:
                 if np.random.random() < self.prob:
                     if self.sweep_range[0] < len(results['sweeps']):
@@ -91,8 +114,8 @@ class LoadMultiViewImageFromMultiSweepsFiles(object):
                         sweep_range = list(range(self.sweep_range[0], self.sweep_range[1]))
                     choices = np.random.choice(sweep_range, self.sweeps_num, replace=False)
                 else:
-                    choices = [int((self.sweep_range[0] + self.sweep_range[1])/2) - 1] 
-                
+                    choices = [int((self.sweep_range[0] + self.sweep_range[1])/2) - 1]
+
             for idx in choices:
                 sweep_idx = min(idx, len(results['sweeps']) - 1)
                 sweep = results['sweeps'][sweep_idx]
@@ -100,20 +123,21 @@ class LoadMultiViewImageFromMultiSweepsFiles(object):
                     sweep = results['sweeps'][sweep_idx - 1]
                 results['filename'].extend([sweep[sensor]['data_path'] for sensor in self.sensors])
 
-                img = np.stack([mmcv.imread(sweep[sensor]['data_path'], self.color_type) for sensor in self.sensors], axis=-1)
-                
+                img = np.stack([mmcv.imread(sweep[sensor]['data_path'], self.color_type)
+                               for sensor in self.sensors], axis=-1)
+
                 if self.to_float32:
                     img = img.astype(np.float32)
                 img = [img[..., i] for i in range(img.shape[-1])]
                 sweep_imgs_list.extend(img)
-                sweep_ts = [lidar_timestamp - sweep[sensor]['timestamp'] / 1e6  for sensor in self.sensors]
+                sweep_ts = [lidar_timestamp - sweep[sensor]['timestamp'] / 1e6 for sensor in self.sensors]
                 timestamp_imgs_list.extend(sweep_ts)
                 for sensor in self.sensors:
                     results['lidar2img'].append(sweep[sensor]['lidar2img'])
                     results['intrinsics'].append(sweep[sensor]['intrinsics'])
                     results['extrinsics'].append(sweep[sensor]['extrinsics'])
         results['img'] = sweep_imgs_list
-        results['timestamp'] = timestamp_imgs_list  
+        results['timestamp'] = timestamp_imgs_list
 
         return results
 
