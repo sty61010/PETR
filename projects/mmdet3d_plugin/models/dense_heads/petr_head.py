@@ -380,13 +380,16 @@ class PETRHead(AnchorFreeHead):
 
         x = mlvl_feats[0]
         batch_size, num_cams = x.size(0), x.size(1)
+        
         input_img_h, input_img_w, _ = img_metas[0]['pad_shape'][0]
         masks = x.new_ones(
             (batch_size, num_cams, input_img_h, input_img_w))
+
         for img_id in range(batch_size):
             for cam_id in range(num_cams):
                 img_h, img_w, _ = img_metas[img_id]['img_shape'][cam_id]
                 masks[img_id, cam_id, :img_h, :img_w] = 0
+
         x = self.input_proj(x.flatten(0, 1))
         x = x.view(batch_size, num_cams, *x.shape[-3:])
         # interpolate masks to have the same spatial shape with x

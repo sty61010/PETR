@@ -14,13 +14,13 @@ class LoadMapsFromFiles(object):
 
     def __call__(self, results):
         map_filename = results['map_filename']
-        maps = np.load(map_filename)
+        maps = np.load(map_filename.replace("/data/Dataset/nuScenes/", "data/nuscenes/"))
         map_mask = maps['arr_0'].astype(np.float32)
 
         maps = map_mask.transpose((2, 0, 1))
         results['gt_map'] = maps
         maps = rearrange(maps, 'c (h h1) (w w2) -> (h w) c h1 w2 ', h1=16, w2=16)
-        maps = maps.reshape(256, 3*256)
+        maps = maps.reshape(256, 3 * 256)
         results['map_shape'] = maps.shape
         results['maps'] = maps
         return results
@@ -79,7 +79,6 @@ class LoadMultiViewImageFromMultiSweepsFiles(object):
                 - scale_factor (float): Scale factor.
                 - img_norm_cfg (dict): Normalization configuration of images.
         """
-
         sweep_imgs_list = []
         timestamp_imgs_list = []
         imgs = results['img']

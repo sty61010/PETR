@@ -9,7 +9,7 @@
 # ------------------------------------------------------------------------
 import torch
 import mmcv
-import numpy as np
+# import numpy as np
 from mmcv.parallel import DataContainer as DC
 from os import path as osp
 import copy
@@ -20,7 +20,7 @@ from mmdet3d.core import (CameraInstance3DBoxes, LiDARInstance3DBoxes, bbox3d2re
                           show_multi_modality_result)
 from mmdet3d.models.detectors.mvx_two_stage import MVXTwoStageDetector
 from projects.mmdet3d_plugin.models.utils.grid_mask import GridMask
-import cv2
+# import cv2
 from einops import rearrange
 
 
@@ -203,7 +203,7 @@ class Petr3D_seg(MVXTwoStageDetector):
             img = img + mean
             # print(img)
 
-            cv2.imwrite("./imgs/"+name+"_"+str(i)+".png", img.astype(np.uint8))
+            cv2.imwrite("./imgs/" + name + "_" + str(i) + ".png", img.astype(np.uint8))
             print(img.shape)
 
     def forward_test(self, img_metas, gt_map, maps, img=None, **kwargs):

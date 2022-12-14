@@ -13,6 +13,7 @@ from .petr_head import PETRHead
 from .petrv2_head import PETRv2Head
 from .depthr_head import DepthrHead
 from .petr_head_seg import PETRHeadseg
+from .bev_head import BEVHead
 __all__ = [
     'DGCNN3DHead',
     'Detr3DHead',
@@ -20,4 +21,5 @@ __all__ = [
     'PETRv2Head',
     'DepthrHead',
     'PETRHeadseg',
+    'BEVHead',
 ]

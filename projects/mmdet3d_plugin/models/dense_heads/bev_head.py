@@ -74,8 +74,7 @@ class SELayer(nn.Module):
 
 
 class RegLayer(nn.Module):
-    def __init__(self,
-                 embed_dims=256,
+    def __init__(self,  embed_dims=256,
                  shared_reg_fcs=2,
                  group_reg_dims=(2, 1, 3, 2, 2),  # xy, z, size, rot, velo
                  act_layer=nn.ReLU,
@@ -109,7 +108,7 @@ class RegLayer(nn.Module):
 
 
 @HEADS.register_module()
-class PETRHeadseg(AnchorFreeHead):
+class BEVHead(AnchorFreeHead):
     """Implements the DETR transformer head.
     See `paper: End-to-End Object Detection with Transformers
     <https://arxiv.org/pdf/2005.12872>`_ for details.
@@ -182,7 +181,6 @@ class PETRHeadseg(AnchorFreeHead):
                  position_range=[-65, -65, -8.0, 65, 65, 8.0],
                  init_cfg=None,
                  normedlinear=False,
-                 # petrv2
                  with_se=False,
                  with_time=False,
                  with_detach=False,
@@ -204,7 +202,7 @@ class PETRHeadseg(AnchorFreeHead):
         self.bg_cls_weight = 0
         self.sync_cls_avg_factor = sync_cls_avg_factor
         class_weight = loss_cls.get('class_weight', None)
-        if class_weight is not None and (self.__class__ is PETRHeadseg):
+        if class_weight is not None and (self.__class__ is BEVHead):
             assert isinstance(class_weight, float), 'Expected ' \
                 'class_weight to have type float. Found ' \
                 f'{type(class_weight)}.'
@@ -272,7 +270,7 @@ class PETRHeadseg(AnchorFreeHead):
         self.with_se = with_se
         self.with_time = with_time
         self.with_detach = with_detach
-        super(PETRHeadseg, self).__init__(num_classes, in_channels, init_cfg=init_cfg)
+        super(BEVHead, self).__init__(num_classes, in_channels, init_cfg=init_cfg)
 
         self.loss_cls = build_loss(loss_cls)
         self.loss_bbox = build_loss(loss_bbox)
@@ -452,7 +450,7 @@ class PETRHeadseg(AnchorFreeHead):
 
         # Names of some parameters in has been changed.
         version = local_metadata.get('version', None)
-        if (version is None or version < 2) and self.__class__ is PETRHeadseg:
+        if (version is None or version < 2) and self.__class__ is BEVHead:
             convert_dict = {
                 '.self_attn.': '.attentions.0.',
                 # '.ffn.': '.ffns.0.',
@@ -791,8 +789,12 @@ class PETRHeadseg(AnchorFreeHead):
 
         lane_preds = lane_preds.squeeze(0)
 
+        # print(f'lane_preds: {lane_preds.shape}')
+        # print(f'gt_lane_list: {gt_lane_list[0].shape}')
+
         loss_lane_mask = self.loss_lane_mask(lane_preds, gt_lane_list[0])
         loss_lane_mask = torch.nan_to_num(loss_lane_mask)
+
         loss_cls = torch.nan_to_num(loss_cls)
         loss_bbox = torch.nan_to_num(loss_bbox)
         return loss_cls, loss_bbox, loss_lane_mask
@@ -845,10 +847,16 @@ class PETRHeadseg(AnchorFreeHead):
         gt_bboxes_list = [torch.cat(
             (gt_bboxes.gravity_center, gt_bboxes.tensor[:, 3:]),
             dim=1).to(device) for gt_bboxes in gt_bboxes_list]
-        gt_lanes = [gt_lanes[0]]
+        # print(f'gt_lanes: {gt_lanes.shape}')
+
+        gt_lanes = [gt_lanes]
+        # print(f'gt_lanes to single: {gt_lanes.shape}')
+
         all_gt_bboxes_list = [gt_bboxes_list for _ in range(num_dec_layers)]
         all_gt_labels_list = [gt_labels_list for _ in range(num_dec_layers)]
+
         all_gt_lanes_list = [gt_lanes for _ in range(num_dec_layers)]
+
         all_gt_bboxes_ignore_list = [
             gt_bboxes_ignore for _ in range(num_dec_layers)
         ]

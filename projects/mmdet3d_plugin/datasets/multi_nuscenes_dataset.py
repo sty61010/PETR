@@ -39,7 +39,9 @@ class MultiCustomNuScenesDataset(NuScenesDataset):
                  filter_empty_gt=True,
                  test_mode=False,
                  eval_version='detection_cvpr_2019',
-                 use_valid_flag=False):
+                 use_valid_flag=False,
+                 data_length=500000,
+                 ):
         super().__init__(
             ann_file=ann_file,
             pipeline=pipeline,
@@ -52,9 +54,14 @@ class MultiCustomNuScenesDataset(NuScenesDataset):
             filter_empty_gt=filter_empty_gt,
             test_mode=test_mode,
             eval_version=eval_version,
-            use_valid_flag=use_valid_flag)
-        print(f'lane_ann_file:{lane_ann_file}')
+            use_valid_flag=use_valid_flag,
+        )
+        # print(f'lane_ann_file:{lane_ann_file}')
         self.lane_infos = self.load_annotations(lane_ann_file)
+        if not self.test_mode:
+            self.data_infos = self.data_infos[:data_length]
+            self.lane_infos = self.lane_infos[:data_length]
+            self._set_group_flag()
 
     def get_data_info(self, index):
         """Get data info according to the given index.
@@ -121,6 +128,7 @@ class MultiCustomNuScenesDataset(NuScenesDataset):
         if not self.test_mode:
             annos = self.get_ann_info(index)
             input_dict['ann_info'] = annos
+
         return input_dict
 
     def _format_bbox(self, results, jsonfile_prefix=None):
@@ -192,8 +200,8 @@ class MultiCustomNuScenesDataset(NuScenesDataset):
         res_path = osp.join(jsonfile_prefix, 'results_nusc.json')
         print('Results writes to', res_path)
         mmcv.dump(nusc_submissions, res_path)
-        print('copy results_nusc.json to /data/detr3d/results_nusc.json')
-        os.system("sudo cp " + res_path + " /data/detr3d/")
+        # print('copy results_nusc.json to /data/detr3d/results_nusc.json')
+        # os.system("sudo cp " + res_path + " /data/detr3d/")
         return res_path
 
     def _evaluate_single(self,
@@ -220,6 +228,8 @@ class MultiCustomNuScenesDataset(NuScenesDataset):
         from nuscenes import NuScenes
         from nuscenes.eval.detection.evaluate import NuScenesEval
         ret_ious = []
+        print(ret_iou)
+
         for i in ret_iou:
             ret_ious.append(i.item())
         print(ret_ious)
@@ -257,6 +267,7 @@ class MultiCustomNuScenesDataset(NuScenesDataset):
 
         detail['{}/NDS'.format(metric_prefix)] = metrics['nd_score']
         detail['{}/mAP'.format(metric_prefix)] = metrics['mean_ap']
+        ret_ious = np.asarray(ret_ious[1])
         detail['iou'] = ret_ious
 
         return detail

@@ -167,6 +167,7 @@ class PETRv2Head(AnchorFreeHead):
                  group_reg_dims=(2, 1, 3, 2, 2),  # xy, z, size, rot, velo
                  init_cfg=None,
                  normedlinear=False,
+                 # petrv2
                  with_fpe=False,
                  with_time=False,
                  with_multi=False,

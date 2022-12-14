@@ -7,29 +7,33 @@
 # Modified from mmdetection3d (https://github.com/open-mmlab/mmdetection3d)
 # Copyright (c) OpenMMLab. All rights reserved.
 # ------------------------------------------------------------------------
-
 import torch
-# import mmcv
-# import numpy as np
-# from mmcv.parallel import DataContainer as DC
-# from os import path as osp
+import mmcv
+import numpy as np
+from mmcv.parallel import DataContainer as DC
+from os import path as osp
+import copy
 from mmcv.runner import force_fp32, auto_fp16
 from mmdet.models import DETECTORS
 from mmdet3d.core import bbox3d2result
-# from mmdet3d.core import (
-#     CameraInstance3DBoxes,
-#     LiDARInstance3DBoxes,
-#     bbox3d2result,
-#     show_multi_modality_result,
-# )
+from mmdet3d.core import (CameraInstance3DBoxes, LiDARInstance3DBoxes, bbox3d2result,
+                          show_multi_modality_result)
 from mmdet3d.models.detectors.mvx_two_stage import MVXTwoStageDetector
 from projects.mmdet3d_plugin.models.utils.grid_mask import GridMask
-import numpy as np
+import cv2
+from einops import rearrange
+
+
+def IOU(intputs, targets):
+    numerator = 2 * (intputs * targets).sum(dim=1)
+    denominator = intputs.sum(dim=1) + targets.sum(dim=1)
+    loss = (numerator + 0.01) / (denominator + 0.01)
+    return loss
 
 
 @DETECTORS.register_module()
-class Petr3D(MVXTwoStageDetector):
-    """Petr3D."""
+class CrossBEV(MVXTwoStageDetector):
+    """Detr3D."""
 
     def __init__(self,
                  use_grid_mask=False,
@@ -47,22 +51,11 @@ class Petr3D(MVXTwoStageDetector):
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None):
-        super(Petr3D, self).__init__(
-            pts_voxel_layer,
-            pts_voxel_encoder,
-            pts_middle_encoder,
-            pts_fusion_layer,
-            img_backbone,
-            pts_backbone,
-            img_neck,
-            pts_neck,
-            pts_bbox_head,
-            img_roi_head,
-            img_rpn_head,
-            train_cfg,
-            test_cfg,
-            pretrained,
-        )
+        super(CrossBEV, self).__init__(pts_voxel_layer, pts_voxel_encoder,
+                                       pts_middle_encoder, pts_fusion_layer,
+                                       img_backbone, pts_backbone, img_neck, pts_neck,
+                                       pts_bbox_head, img_roi_head, img_rpn_head,
+                                       train_cfg, test_cfg, pretrained)
         self.grid_mask = GridMask(True, True, rotate=1, offset=False, ratio=0.5, mode=1, prob=0.7)
         self.use_grid_mask = use_grid_mask
 
@@ -109,6 +102,7 @@ class Petr3D(MVXTwoStageDetector):
                           pts_feats,
                           gt_bboxes_3d,
                           gt_labels_3d,
+                          maps,
                           img_metas,
                           gt_bboxes_ignore=None):
         """Forward function for point cloud branch.
@@ -125,7 +119,9 @@ class Petr3D(MVXTwoStageDetector):
             dict: Losses of each branch.
         """
         outs = self.pts_bbox_head(pts_feats, img_metas)
-        loss_inputs = [gt_bboxes_3d, gt_labels_3d, outs]
+
+        # print(f'maps: {maps.shape}')
+        loss_inputs = [gt_bboxes_3d, gt_labels_3d, outs, maps]
         losses = self.pts_bbox_head.loss(*loss_inputs)
 
         return losses
@@ -152,6 +148,7 @@ class Petr3D(MVXTwoStageDetector):
                       gt_bboxes_3d=None,
                       gt_labels_3d=None,
                       gt_labels=None,
+                      maps=None,
                       gt_bboxes=None,
                       img=None,
                       proposals=None,
@@ -188,42 +185,120 @@ class Petr3D(MVXTwoStageDetector):
         losses_pts = self.forward_pts_train(img_feats,
                                             gt_bboxes_3d,
                                             gt_labels_3d,
+                                            maps,
                                             img_metas,
-                                            gt_bboxes_ignore)
+                                            gt_bboxes_ignore,
+                                            )
         losses.update(losses_pts)
         return losses
 
-    def forward_test(self, img_metas, img=None, **kwargs):
+    def img_show(self, imgs):
+        import os
+        import cv2
+        import random
+        import numpy as np
+        mean = np.array([103.530, 116.280, 123.675])
+        mean = mean.reshape(1, 1, 3)
+        if not os.path.exists("./imgs"):
+            os.makedirs("./imgs")
+        name = str(random.randint(1, 20))
+        for i in range(imgs.size(1)):
+            img = imgs[0][i]
+            img = img.permute(1, 2, 0).detach().cpu().numpy()
+            img = img + mean
+            # print(img)
+
+            cv2.imwrite("./imgs/"+name+"_"+str(i)+".png", img.astype(np.uint8))
+            print(img.shape)
+
+    def forward_test(self, img_metas, gt_map, maps, img=None, **kwargs):
         for var, name in [(img_metas, 'img_metas')]:
             if not isinstance(var, list):
                 raise TypeError('{} must be a list, but got {}'.format(
                     name, type(var)))
         img = [img] if img is None else img
-        return self.simple_test(img_metas[0], img[0], **kwargs)
+        return self.simple_test(img_metas[0], gt_map, img[0], maps, **kwargs)
 
-    def simple_test_pts(self, x, img_metas, rescale=False):
+    def simple_test_pts(self, x, img_metas, gt_map, maps, rescale=False):
         """Test function of point cloud branch."""
         outs = self.pts_bbox_head(x, img_metas)
         bbox_list = self.pts_bbox_head.get_bboxes(
-            outs,
-            img_metas,
-            rescale=rescale
-        )
+            outs, img_metas, rescale=rescale)
         bbox_results = [
             bbox3d2result(bboxes, scores, labels)
             for bboxes, scores, labels in bbox_list
         ]
-        return bbox_results
 
-    def simple_test(self, img_metas, img=None, rescale=False):
+        with torch.no_grad():
+
+            lane_preds = outs['all_lane_preds'][5].squeeze(0)  # [B,N,H,W]
+            # lane_pred_obj=outs['all_lane_cls'][5].squeeze(0)     #[B,N,2]
+            n, w = lane_preds.size()
+            # lane_preds=maps[0][0]
+
+            pred_maps = lane_preds.view(256, 3, 16, 16)
+
+            f_lane = rearrange(pred_maps, '(h w) c h1 w2 -> c (h h1) (w w2)', h=16, w=16)
+            f_lane = f_lane.sigmoid()
+            f_lane[f_lane >= 0.5] = 1
+            f_lane[f_lane < 0.5] = 0
+            f_lane_show = copy.deepcopy(f_lane)
+            gt_map_show = copy.deepcopy(gt_map[0])
+
+            f_lane = f_lane.view(3, -1)
+            gt_map = gt_map[0].view(3, -1)
+
+            ret_iou = IOU(f_lane, gt_map).cpu()
+            show_res = False
+            if show_res:
+                # select good quality results
+                # if ret_iou[0]>0.79 and ret_iou[1]>0.45 and ret_iou[2]>0.51:
+
+                pres = f_lane_show
+                pre = torch.zeros(256, 256, 3)
+                pre += 255
+                label = [[71, 130, 255], [255, 255, 0], [255, 144, 30]]
+                # label=[[255,0,0],[0,255,0],[0,0,255]]
+                pre[..., 0][pres[0] == 1] = label[0][0]
+                pre[..., 1][pres[0] == 1] = label[0][1]
+                pre[..., 2][pres[0] == 1] = label[0][2]
+                pre[..., 0][pres[2] == 1] = label[2][0]
+                pre[..., 1][pres[2] == 1] = label[2][1]
+                pre[..., 2][pres[2] == 1] = label[2][2]
+                pre[..., 0][pres[1] == 1] = label[1][0]
+                pre[..., 1][pres[1] == 1] = label[1][1]
+                pre[..., 2][pres[1] == 1] = label[1][2]
+                cv2.imwrite('./res-pre/'+str(ret_iou[0])+'_'+str(ret_iou[1])+'_' +
+                            str(ret_iou[2])+'_'+img_metas[0]['sample_idx']+'.png', pre.cpu().numpy())
+                pres = gt_map_show[0]
+                pre = torch.zeros(256, 256, 3)
+                pre += 255
+                label = [[71, 130, 255], [255, 255, 0], [255, 144, 30]]
+                # label=[[255,0,0],[0,255,0],[0,0,255]]
+                pre[..., 0][pres[0] == 1] = label[0][0]
+                pre[..., 1][pres[0] == 1] = label[0][1]
+                pre[..., 2][pres[0] == 1] = label[0][2]
+                pre[..., 0][pres[2] == 1] = label[2][0]
+                pre[..., 1][pres[2] == 1] = label[2][1]
+                pre[..., 2][pres[2] == 1] = label[2][2]
+                pre[..., 0][pres[1] == 1] = label[1][0]
+                pre[..., 1][pres[1] == 1] = label[1][1]
+                pre[..., 2][pres[1] == 1] = label[1][2]
+                cv2.imwrite('./res-gt/'+str(ret_iou[0])+'_'+str(ret_iou[1])+'_' +
+                            str(ret_iou[2])+'_'+img_metas[0]['sample_idx']+'.png', pre.cpu().numpy())
+
+        return bbox_results, ret_iou
+
+    def simple_test(self, img_metas, gt_map=None, img=None, maps=None, rescale=False):
         """Test function without augmentaiton."""
         img_feats = self.extract_feat(img=img, img_metas=img_metas)
 
         bbox_list = [dict() for i in range(len(img_metas))]
-        bbox_pts = self.simple_test_pts(
-            img_feats, img_metas, rescale=rescale)
+        bbox_pts, ret_iou = self.simple_test_pts(
+            img_feats, img_metas, gt_map, maps, rescale=rescale)
         for result_dict, pts_bbox in zip(bbox_list, bbox_pts):
             result_dict['pts_bbox'] = pts_bbox
+            result_dict['ret_iou'] = ret_iou
         return bbox_list
 
     def aug_test_pts(self, feats, img_metas, rescale=False):
@@ -252,58 +327,61 @@ class Petr3D(MVXTwoStageDetector):
             result_dict['pts_bbox'] = pts_bbox
         return bbox_list
 
-    def forward_dummy(self, points=None, img_metas=None, img_inputs=None, **kwargs):
-        from mmdet3d.core.bbox.structures.box_3d_mode import LiDARInstance3DBoxes
-        # pad_shape = input_shape + (3,)
-        lidar2img = np.array([
-            [[[667.5999, -11.3459, -1.8519, -891.7272],
-              [38.3278, 67.5572, -559.0681, 760.1029],
-              [0.5589, 0.8291, 0.0114, -1.1843],
-              [0.5589, 0.8291, 0.0114, -1.1843]],
+    def show_results(self, data, result, out_dir, score_thr=0.1):
+        """Results visualization.
 
-             [[412.9886, 506.6375, 1.8396, -668.0064],
-              [-20.6782, 71.7123, -553.2657, 870.4648],
-              [-0.3188, 0.9478, -0.0041, -0.1035],
-              [0.5589, 0.8291, 0.0114, -1.1843]],
+        Args:
+            data (list[dict]): Input images and the information of the sample.
+            result (list[dict]): Prediction results.
+            out_dir (str): Output directory of visualization result.
+        """
 
-             [[-365.1992, 355.5753, 9.6372, -12.7062],
-                [-78.5942, 2.7520, -354.6458, 559.4022],
-                [-0.9998, -0.0013, 0.0186, -0.0372],
-                [0.5589, 0.8291, 0.0114, -1.1843]],
+        for batch_id in range(len(result)):
+            if isinstance(data['img_metas'][0], DC):
+                img_filename = data['img_metas'][0]._data[0][batch_id][
+                    'filename']
+                cam2img = data['img_metas'][0]._data[0][batch_id]['lidar2img']
+            elif mmcv.is_list_of(data['img_metas'][0], dict):
+                img_filename = data['img_metas'][0][batch_id]['filename']
+                cam2img = data['img_metas'][0][batch_id]['lidar2img']
+            else:
+                ValueError(
+                    f"Unsupported data type {type(data['img_metas'][0])} "
+                    f'for visualization!')
 
-             [[-643.1426, -139.6496, -12.1919, 556.9597],
-              [-20.3761, -62.4205, -556.1431, 853.0998],
-              [-0.3483, -0.9370, -0.0269, -0.0905],
-              [0.5589, 0.8291, 0.0114, -1.1843]],
+            for i in range(len(img_filename)):
+                if "once" in img_filename[i]:
+                    img_path = img_filename[i].replace(
+                        "/home/sunjianjian/workspace/temp/once_benchmark/data/", "work_dir/")
+                    img = mmcv.imread(img_path)
 
-             [[-259.5370, -605.4091, -16.6692, 100.7252],
-              [42.5486, -48.6904, -556.4778, 741.4697],
-              [0.5614, -0.8272, -0.0248, -1.1877],
-              [0.5589, 0.8291, 0.0114, -1.1843]],
+                    file_name = img_path.split("/")[-2] + osp.split(img_path)[-1].split('.')[0]
+                else:
+                    img_path = img_filename[i]
+                    img = mmcv.imread(img_path)
+                    file_name = osp.split(img_path)[-1].split('.')[0]
+                print(file_name)
+                assert out_dir is not None, 'Expect out_dir, got none.'
 
-             [[369.1537, -550.5783, -9.0176, -553.2021],
-              [71.9614, 7.6353, -557.7432, 728.3124],
-              [0.9998, 0.0181, -0.0075, -1.5520],
-              [0.5589, 0.8291, 0.0114, -1.1843]]],
-        ])
-        img_shape = [[512, 1408, 3] for i in range(6)]
+                pred_bboxes = result[batch_id]['pts_bbox']['boxes_3d']
+                pred_scores = result[batch_id]['pts_bbox']['scores_3d']
+                pred_labels = result[batch_id]['pts_bbox']['labels_3d']
 
-        # img_metas = [dict(box_type_3d=LiDARInstance3DBoxes, pad_shape=[[512, 1408, 3]], img_shape=[
-        #                   [512, 1408, 3], [512, 1408, 3], [512, 1408, 3], [512, 1408, 3], [512, 1408, 3], [512, 1408, 3]])]
+                mask = pred_scores > score_thr
 
-        img_metas = [
-            dict(box_type_3d=LiDARInstance3DBoxes,
-                 lidar2img=l2i,
-                 pad_shape=img_shape,
-                 img_shape=img_shape,
-                 ) for l2i in lidar2img]
+                pred_bboxes = pred_bboxes[mask]
+                pred_scores = pred_scores[mask]
+                pred_labels = pred_labels[mask]
 
-        img_feats = self.extract_feat(img=img_inputs, img_metas=img_metas)
+                assert isinstance(pred_bboxes, LiDARInstance3DBoxes), \
+                    f'unsupported predicted bbox type {type(pred_bboxes)}'
 
-        bbox_list = [dict() for _ in range(1)]
-        assert self.with_pts_bbox
-        bbox_pts = self.simple_test_pts(
-            img_feats, img_metas, rescale=False)
-        for result_dict, pts_bbox in zip(bbox_list, bbox_pts):
-            result_dict['pts_bbox'] = pts_bbox
-        return bbox_list
+                show_multi_modality_result(
+                    img,
+                    None,
+                    pred_bboxes,
+                    cam2img[i],
+                    out_dir,
+                    file_name,
+                    'lidar',
+                    show=False)

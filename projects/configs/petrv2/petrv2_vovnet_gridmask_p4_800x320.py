@@ -258,7 +258,7 @@ lr_config = dict(
     min_lr_ratio=1e-3,
 )
 total_epochs = 24
-evaluation = dict(interval=24, pipeline=test_pipeline)
+evaluation = dict(interval=2, pipeline=test_pipeline)
 find_unused_parameters = False  # when use checkpoint, find_unused_parameters must be False
 checkpoint_config = dict(interval=1, max_keep_ckpts=3)
 runner = dict(type='EpochBasedRunner', max_epochs=total_epochs)

@@ -30,7 +30,7 @@ class CustomNuScenesDataset(NuScenesDataset):
                  test_mode=False,
                  eval_version='detection_cvpr_2019',
                  use_valid_flag=False,
-                 data_length=None):
+                 data_length=500000):
         super().__init__(ann_file,
                          pipeline,
                          data_root,
