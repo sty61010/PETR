@@ -249,11 +249,13 @@ class CrossBEV(MVXTwoStageDetector):
             gt_map = gt_map[0].view(3, -1)
 
             ret_iou = IOU(f_lane, gt_map).cpu()
-            show_res = False
+            # show_res = False
+            show_res = True
+
             if show_res:
                 # select good quality results
                 # if ret_iou[0]>0.79 and ret_iou[1]>0.45 and ret_iou[2]>0.51:
-
+                print("show segmentation results.")
                 pres = f_lane_show
                 pre = torch.zeros(256, 256, 3)
                 pre += 255
@@ -268,8 +270,10 @@ class CrossBEV(MVXTwoStageDetector):
                 pre[..., 0][pres[1] == 1] = label[1][0]
                 pre[..., 1][pres[1] == 1] = label[1][1]
                 pre[..., 2][pres[1] == 1] = label[1][2]
-                cv2.imwrite('./res-pre/'+str(ret_iou[0])+'_'+str(ret_iou[1])+'_' +
-                            str(ret_iou[2])+'_'+img_metas[0]['sample_idx']+'.png', pre.cpu().numpy())
+                # cv2.imwrite('./res-pre/'+str(ret_iou[0])+'_'+str(ret_iou[1])+'_' +
+                #             str(ret_iou[2])+'_'+img_metas[0]['sample_idx']+'.png', pre.cpu().numpy())
+                cv2.imwrite('./seg_res/'+str(ret_iou[0])+'_'+str(ret_iou[1])+'_' +
+                            str(ret_iou[2])+'_'+img_metas[0]['sample_idx']+'_pred.png', pre.cpu().numpy())
                 pres = gt_map_show[0]
                 pre = torch.zeros(256, 256, 3)
                 pre += 255
@@ -284,9 +288,10 @@ class CrossBEV(MVXTwoStageDetector):
                 pre[..., 0][pres[1] == 1] = label[1][0]
                 pre[..., 1][pres[1] == 1] = label[1][1]
                 pre[..., 2][pres[1] == 1] = label[1][2]
-                cv2.imwrite('./res-gt/'+str(ret_iou[0])+'_'+str(ret_iou[1])+'_' +
-                            str(ret_iou[2])+'_'+img_metas[0]['sample_idx']+'.png', pre.cpu().numpy())
-
+                # cv2.imwrite('./res-gt/'+str(ret_iou[0])+'_'+str(ret_iou[1])+'_' +
+                #             str(ret_iou[2])+'_'+img_metas[0]['sample_idx']+'.png', pre.cpu().numpy())
+                cv2.imwrite('./seg_res/'+str(ret_iou[0])+'_'+str(ret_iou[1])+'_' +
+                            str(ret_iou[2])+'_'+img_metas[0]['sample_idx']+'_gt.png', pre.cpu().numpy())
         return bbox_results, ret_iou
 
     def simple_test(self, img_metas, gt_map=None, img=None, maps=None, rescale=False):

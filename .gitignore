@@ -120,6 +120,9 @@ data/
 mmdetection3d/
 exps/
 result_vis/
+res-pre
+res-gt
+seg_res
 *~
 mmdet3d/.mim
 

@@ -251,7 +251,7 @@ test_pipeline = [
                             'img_norm_cfg', 'sample_idx', 'timestamp'))
         ])
 ]
-data_length = 70000
+data_length = 400
 data = dict(
     samples_per_gpu=4,
     workers_per_gpu=6,
@@ -309,7 +309,7 @@ lr_config = dict(
     warmup_ratio=1.0 / 3,
     min_lr_ratio=1e-3,
 )
-total_epochs = 25
+total_epochs = 24
 evaluation = dict(interval=1, pipeline=test_pipeline)
 find_unused_parameters = False
 checkpoint_config = dict(interval=1, max_keep_ckpts=3)
