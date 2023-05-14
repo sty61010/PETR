@@ -290,7 +290,7 @@ test_pipeline = [
         ])
 ]
 
-data_length = 60000
+data_length = 600
 data = dict(
     samples_per_gpu=2,
     workers_per_gpu=4,
