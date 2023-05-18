@@ -13,6 +13,7 @@ from .petr3d import Petr3D
 from .depthr3d import Depthr3D
 from .petr3d_seg import Petr3D_seg
 from .crossbev3d import CrossBEV
+from .crossdtr3d import Crossdtr3D
 __all__ = [
     'ObjDGCNN',
     'Detr3D',
@@ -20,4 +21,5 @@ __all__ = [
     'Depthr3D',
     'Petr3D_seg',
     'CrossBEV',
+    'Crossdtr3D',
 ]

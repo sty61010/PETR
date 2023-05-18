@@ -7,9 +7,10 @@
 from .cp_fpn import CPFPN
 from .depth_gt_encoder import DepthGTEncoder
 from .depth_predictor import DepthPredictor
-
+from .depth_predictor_roi import DepthPredictorROI
 __all__ = [
     'CPFPN',
     'DepthGTEncoder',
     'DepthPredictor',
+    'DepthPredictorROI',
 ]
