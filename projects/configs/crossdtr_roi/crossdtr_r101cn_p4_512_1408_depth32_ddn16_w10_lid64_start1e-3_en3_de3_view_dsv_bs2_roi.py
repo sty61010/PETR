@@ -33,6 +33,8 @@ head_in_channels = 256
 depth_start = 1e-3
 depth_num = 64
 position_range = [-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]
+roi_grid_H = 5
+roi_grid_W = 7
 
 model = dict(
     type='Crossdtr3D',
@@ -70,8 +72,8 @@ model = dict(
         embed_dims=embed_dims,
         position_range=position_range,
         normedlinear=False,
-        grid_H=5, 
-        grid_W=7,
+        grid_H=roi_grid_H,
+        grid_W=roi_grid_W,
         depth_predictor=dict(
             type='DepthPredictorROI',
             num_depth_bins=depth_num,
@@ -82,6 +84,8 @@ model = dict(
             in_channels=embed_dims,
             depth_maps_down_scale=depth_maps_down_scale,
             depth_emb_down_scale=depth_emb_down_scale,
+            grid_H=roi_grid_H,
+            grid_W=roi_grid_W,
             encoder=dict(
                 type='DetrTransformerEncoder',
                 num_layers=3,
@@ -177,6 +181,7 @@ model = dict(
             downsample_factor=depth_maps_down_scale,
             loss_weight=1.0,
         ),
+        loss_roi_depth=1.0,
     ),
     # model training and testing settings
     train_cfg=dict(pts=dict(

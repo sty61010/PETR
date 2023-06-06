@@ -44,6 +44,7 @@ from mmdet3d.models.builder import build_neck
 from mmdet3d.core.bbox.structures.lidar_box3d import LiDARInstance3DBoxes
 from projects.mmdet3d_plugin.core.bbox.util import normalize_bbox
 from projects.mmdet3d_plugin.models.utils import depth_utils
+from projects.mmdet3d_plugin.models.losses.focalloss import focal_loss
 
 from torchvision.ops import roi_align
 
@@ -156,6 +157,7 @@ class CrossdtrROIHead(AnchorFreeHead):
                  only_cross_depth_attn=False,
                  loss_ddn=None,
                  loss_depth=False,
+                 loss_roi_depth=None,
 
                  **kwargs):
         # NOTE here use `AnchorFreeHead` instead of `TransformerHead`,
@@ -301,6 +303,7 @@ class CrossdtrROIHead(AnchorFreeHead):
             self.depth_maps_down_scale = loss_ddn.get("downsample_factor")
 
         self.loss_depth = loss_depth
+        self.loss_roi_depth = loss_roi_depth
         self.only_cross_depth_attn = only_cross_depth_attn
         self.grid_H, self.grid_W = grid_H, grid_W
         self._init_layers()
@@ -540,7 +543,7 @@ class CrossdtrROIHead(AnchorFreeHead):
         pred_depth_map_logits = None
         weighted_depth = None
         if self.depth_predictor is not None:
-            _, _, roi_depths = self.get_depth_map_and_gt_bboxes_2d(
+            _, gt_bbox2d, _ = self.get_depth_map_and_gt_bboxes_2d(
                 gt_bboxes_list=gt_bboxes_3d,
                 img_metas=img_metas,
                 target=False,
@@ -550,10 +553,11 @@ class CrossdtrROIHead(AnchorFreeHead):
             # pred_depth_map_logits: [B, N, D, H, W]
             # depth_pos_embed: [B, N, C, H, W]
             # weighted_depth(pred_depth_map_values): [B, N, H, W]
-            pred_depth_map_logits, depth_pos_embed, weighted_depth = self.depth_predictor(
+            pred_depth_map_logits, depth_pos_embed, weighted_depth, roi_depths = self.depth_predictor(
                 mlvl_feats=[x],
                 mask=None,
                 pos=None,
+                gt_bbox2d=gt_bbox2d,
             )
             # print(f'pred_depth_map_logits: {pred_depth_map_logits.shape[:]}')
 
@@ -634,6 +638,7 @@ class CrossdtrROIHead(AnchorFreeHead):
             'pred_depth_map_logits': pred_depth_map_logits,
             # pred_depth_map_values
             'weighted_depth': weighted_depth,
+            'pred_roi_depths': roi_depths,
         }
         return outs
 
@@ -644,7 +649,7 @@ class CrossdtrROIHead(AnchorFreeHead):
         target: bool = True,
         device: Optional[torch.device] = None,
         depth_maps_down_scale: int = 8,
-    ) -> Tuple[torch.Tensor, List[List[torch.Tensor]]]:
+    ) -> Tuple[torch.Tensor, List[List[torch.Tensor]], List[torch.Tensor]]:
         """Get depth map and the 2D ground truth bboxes.
 
         Args:
@@ -665,9 +670,9 @@ class CrossdtrROIHead(AnchorFreeHead):
                 [[gt_bboxes_tensor_camera_0, gt_bboxes_tensor_camera_1, ..., gt_bboxes_tensor_camera_n] (sample 0),
                  [gt_bboxes_tensor_camera_0, gt_bboxes_tensor_camera_1, ..., gt_bboxes_tensor_camera_n] (sample 1),
                  ...].
-            roi_depths:  A list of list of tensor containing tensors of RoI depths with shape [num_boxes, self.grid_H, self.grid_W].
-                [B, N, ....]
-                RoI depths with shape [num_boxes, self.grid_H, self.grid_W].
+            roi_depths:  A list of list of tensor containing tensors of RoI depths with shape [num_boxes_all_camera, self.grid_H, self.grid_W].
+                [B, ....]
+                RoI depths with shape [num_boxes_all_camera, self.grid_H, self.grid_W].
                 
                 
         """
@@ -686,9 +691,9 @@ class CrossdtrROIHead(AnchorFreeHead):
             # new version of mmdetection3d do not provide empety tensor
             if len(gt_bboxes.tensor) != 0:
                 # [num_objects, 8, 3]
-                gt_bboxes_corners = gt_bboxes.corners
+                gt_bboxes_corners = gt_bboxes.corners.to(device)
                 # [num_objects, 3].
-                gt_bboxes_centers = gt_bboxes.gravity_center
+                gt_bboxes_centers = gt_bboxes.gravity_center.to(device)
             else:
                 # [num_objects, 8, 3]
                 gt_bboxes_corners = torch.empty([0, 8, 3], device=device)
@@ -776,22 +781,21 @@ class CrossdtrROIHead(AnchorFreeHead):
                 
                 # Applied ROI Depth
                 # [N, 4]: (x_min, y_min, x_max, y_max)
-                boxes2d = bboxes.float()
+                boxes2d = bboxes.clone().float()
                 boxes2d[:, 2:] += boxes2d[:, :2]
                 
                 # [N, ]
                 num_boxes = depth_target.shape
                 
-                # [num_valid_boxes, 1, self.grid_H, self.grid_W]
+                # [num_boxes, 1, self.grid_H, self.grid_W]
                 roi_aligned_out = roi_align(depth_map.unsqueeze(0).unsqueeze(0).type(torch.float32),
                                             [boxes2d], (self.grid_H, self.grid_W), aligned=True)
-                
-                # [num_valid_boxes, self.grid_H, self.grid_W]
-                roi_depth = roi_aligned_out.squeeze()
+                # [num_boxes, self.grid_H, self.grid_W]
+                roi_aligned_out = roi_aligned_out[:, 0]
                 
                 gt_bboxes_all_camera.append(bboxes)
                 depth_maps_all_camera.append(depth_map)
-                roi_depth_all_camera.append(roi_depth)
+                roi_depth_all_camera.append(roi_aligned_out)
 
             # Visualizatioin for debugging
             # for i in range(6):
@@ -810,6 +814,8 @@ class CrossdtrROIHead(AnchorFreeHead):
 
             # [num_cameras, depth_map_H, depth_map_W]
             depth_maps_all_camera = torch.stack(depth_maps_all_camera)
+            # [num_boxes_all_camera, self.grid_H, self.grid_W]
+            roi_depth_all_camera = torch.cat(roi_depth_all_camera)
 
             gt_depth_maps.append(depth_maps_all_camera)
             gt_bboxes_2d.append(gt_bboxes_all_camera)
@@ -1154,7 +1160,7 @@ class CrossdtrROIHead(AnchorFreeHead):
                         ...].
             """
 
-            gt_depth_maps, gt_bboxes_2d, _ = self.get_depth_map_and_gt_bboxes_2d(
+            gt_depth_maps, gt_bboxes_2d, gt_roi_depths = self.get_depth_map_and_gt_bboxes_2d(
                 gt_bboxes_list=gt_bboxes_3d,
                 img_metas=img_metas,
                 # TODO: `target` should be true after removing depth_gt_encoder
@@ -1171,6 +1177,16 @@ class CrossdtrROIHead(AnchorFreeHead):
                 gt_bboxes_2d=gt_bboxes_2d,
             )
             loss_dict['loss_ddn'] = loss_ddn
+
+            if self.loss_roi_depth is not None:
+                pred_roi_depths = preds_dicts['pred_roi_depths']
+                gt_roi_depths = torch.cat(gt_roi_depths, dim=0)
+                target_roi_depths_cls = depth_utils.bin_depths(gt_roi_depths, **self.depth_bin_cfg, target=True)
+                # print(f'pred_roi_depths: {pred_roi_depths.shape}, gt_roi_depths: {gt_roi_depths.shape}')
+                roi_depth_loss = focal_loss(pred_roi_depths, target_roi_depths_cls, alpha=0.25, reduction='mean')
+                roi_depth_loss *= self.loss_roi_depth
+                loss_dict['loss_roi_depth'] = roi_depth_loss
+
         # print(f'loss_dict: {loss_dict}')
 
         return loss_dict

@@ -2,7 +2,7 @@ import torch
 from torchvision.ops import roi_align
 from torch import nn
 
-from utils import box_ops
+from projects.mmdet3d_plugin.models.utils import box_ops
 
 
 class RoIDepth(nn.Module):
@@ -27,7 +27,7 @@ class RoIDepth(nn.Module):
 
         # [num_boxes, 4]
         bboxes = box_ops.box_cxcywh_to_xyxy(coords2d)
-        bboxes = bboxes.clamp(0, 1) * bboxes.new_tensor([W, H, W, H])
+        # bboxes = bboxes.clamp(0, 1) * bboxes.new_tensor([W, H, W, H])
 
         # [num_boxes, 1]
         batch_idx = torch.arange(batch, device=bboxes.device).repeat_interleave(num_gt_per_img).view(-1, 1)

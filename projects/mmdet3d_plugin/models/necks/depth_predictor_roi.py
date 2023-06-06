@@ -16,6 +16,8 @@ from typing import (
     Optional
 )
 
+from projects.mmdet3d_plugin.models.utils.roi_depth import RoIDepth
+
 
 @NECKS.register_module()
 class DepthPredictorROI(nn.Module):
@@ -29,6 +31,8 @@ class DepthPredictorROI(nn.Module):
                  in_channels=256,
                  depth_maps_down_scale=32,
                  depth_emb_down_scale=32,
+                 grid_H=5,
+                 grid_W=7,
                  encoder=None,
                  ):
         """
@@ -95,11 +99,13 @@ class DepthPredictorROI(nn.Module):
         self.depth_pos_embed = nn.Embedding(int(self.depth_max) + 1, 256)
 
         self.num_levels = num_levels
+        self.roi_depth = RoIDepth(grid_H, grid_W)
 
     def forward(self,
                 mlvl_feats: List[torch.Tensor],
                 mask: Optional[List[torch.Tensor]] = None,
-                pos: Optional[List[torch.Tensor]] = None):
+                pos: Optional[List[torch.Tensor]] = None,
+                gt_bbox2d: Optional[List[List[torch.Tensor]]] = None):
         """Forward function.
         Args:
             mlvl_feats (List[torch.Tensor]): Features from the upstream
@@ -109,6 +115,8 @@ class DepthPredictorROI(nn.Module):
                 `Optional[List[torch.Tensor]]: [B, N, H, W]`
             pos (Optional[List[torch.Tensor]]): position embedding for input feature images
                 `Optional[List[torch.Tensor]]: [B, N, C, H, W]`
+            gt_bbox2d (Optional[List[List[torch.Tensor]]]): ground truth bounding boxes
+                `Optional[List[List[torch.Tensor]]]: [B, N, ...]`. Each tensor has shape (*, 4)
 
 
         Returns:
@@ -140,6 +148,19 @@ class DepthPredictorROI(nn.Module):
         src = flatten_feats[0]
 
         src = self.depth_head(src)
+        if gt_bbox2d is not None:
+            # [num_boxes, 4]
+            target_boxes = torch.cat([torch.cat(batch, dim=0) for batch in gt_bbox2d], dim=0)
+            # print(f'target_boxes: {target_boxes.shape}, {target_boxes.device}')
+            # [batch]
+            num_gt_per_scene = target_boxes.new_tensor([len(cam_tensor) for batch in gt_bbox2d for cam_tensor in batch], dtype=torch.long)
+            # print(num_gt_per_scene, src.shape)
+            # [num_boxes, C, grid_H, grid_W]
+            roi_src = self.roi_depth(src, target_boxes, num_gt_per_scene)
+            roi_depths = self.depth_classifier(roi_src)
+        else:
+            roi_depths = None
+
         depth_logits = self.depth_classifier(src)
 
         depth_probs = F.softmax(depth_logits, dim=1)
@@ -190,7 +211,7 @@ class DepthPredictorROI(nn.Module):
         # print(f'depth_embed: {depth_embed.shape}')
         # print(f'weighted_depth: {weighted_depth.shape}')
 
-        return depth_logits, depth_embed_ds, weighted_depth
+        return depth_logits, depth_embed_ds, weighted_depth, roi_depths
 
     def interpolate_depth_embed(self, depth):
         depth = depth.clamp(min=0, max=self.depth_max)
